@@ -1,0 +1,19 @@
+[Unit]
+Description=Philosophy Reader AI worker (one sequential worker)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=exec
+User=prdr
+Group=prdr
+WorkingDirectory=/opt/philosophy-reader
+EnvironmentFile=/etc/philosophy-reader/service.env
+ExecStart=/opt/philosophy-reader/venv/bin/python /opt/philosophy-reader/manage.py run_ai_worker --idle-seconds 5
+Restart=on-failure
+RestartSec=15
+MemoryHigh=300M
+MemoryMax=450M
+
+[Install]
+WantedBy=multi-user.target

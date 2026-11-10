@@ -1,0 +1,13 @@
+[Unit]
+Description=Philosophy Reader maintenance (stale leases, expired sessions)
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=prdr
+Group=prdr
+WorkingDirectory=/opt/philosophy-reader
+EnvironmentFile=/etc/philosophy-reader/service.env
+ExecStart=/opt/philosophy-reader/venv/bin/python /opt/philosophy-reader/manage.py run_maintenance
+MemoryHigh=200M
+MemoryMax=300M

@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<section class="form-page"><h1>Вход</h1>{% if error %}<p class="error">{{ error }}</p>{% endif %}<form method="post">{% csrf_token %}<p><label for="login">Логин</label><input id="login" name="login" required autocomplete="username" maxlength="32"></p><p><label for="password">Пароль</label><input id="password" name="password" type="password" required autocomplete="current-password" maxlength="128"></p><button type="submit">Войти</button></form><p>Восстановления доступа нет.</p></section>{% endblock %}

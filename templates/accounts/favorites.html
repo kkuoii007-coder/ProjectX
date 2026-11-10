@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<h1>Избранное</h1>{% for f in favorites %}<article class="card"><h2><a href="{% url 'library:read' f.publication.slug %}">{{ f.publication.revision.payload.title_ru }}</a></h2><form method="post" action="{% url 'account:favorite_toggle' f.publication.pk %}">{% csrf_token %}<button type="submit">Удалить из избранного</button></form></article>{% empty %}<p>Избранных материалов пока нет.</p>{% endfor %}{% endblock %}

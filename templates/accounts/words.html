@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<h1>Сохранённые слова</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Сохранить слово</button></form>{% for word in words %}<article class="card"><h2>{{ word.term }}</h2><p>{{ word.translation_ru }}</p>{% if word.context_en %}<blockquote lang="en">{{ word.context_en }}</blockquote>{% endif %}</article>{% empty %}<p>Слов пока нет.</p>{% endfor %}{% endblock %}

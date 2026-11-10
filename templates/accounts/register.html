@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<section class="form-page"><h1>Регистрация</h1><div class="warning"><strong>Проект работает в тестовом режиме.<br>Восстановления доступа пока нет.</strong><p>Мы не запрашиваем email или телефон. Если вы забудете логин или пароль, вернуть доступ к кабинету, текстам и кредитам не получится. Сохраните данные в менеджере паролей перед регистрацией.</p></div><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Зарегистрироваться</button></form></section>{% endblock %}

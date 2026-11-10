@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}{{ publication.revision.payload.title_ru }}{% endblock %}
+{% block content %}
+<article class="reader">
+  <p><a href="{% url 'library:library' %}">← Библиотека</a></p>
+  <h1>{{ publication.revision.payload.title_ru }}</h1>
+  <p class="lead">{{ publication.revision.payload.lead_ru|default:'' }}</p>
+  {% if publication.thinker %}<p>Мыслитель: <a href="{% url 'library:thinker' publication.thinker.slug %}">{{ publication.thinker.name_ru }}</a></p>{% endif %}
+  <p class="hint">Нажмите на английское предложение, Enter или Space, чтобы увидеть перевод. Перевод уже сохранён и не тратит кредиты.</p>
+  {% for part in parts %}
+    <section class="reader-part" id="part-{{ forloop.counter }}">
+      <h2>{{ part.title_en }}</h2>
+      {% if part.title_ru %}<p class="part-ru">{{ part.title_ru }}</p>{% endif %}
+      {% for sentence in part.sentences %}
+      <div class="sentence" tabindex="0" role="button" aria-expanded="false">
+        <p lang="en">{{ sentence.en }}</p>
+        <p class="translation" lang="ru" hidden>{{ sentence.ru }}</p>
+      </div>
+      {% endfor %}
+    </section>
+  {% endfor %}
+  {% if publication.revision.payload.terms %}<aside><h2>Термины</h2>{% for term in publication.revision.payload.terms %}<p><strong>{{ term.en }}</strong> — {{ term.ru }}</p>{% endfor %}</aside>{% endif %}
+  {% if user.is_authenticated %}<form method="post" action="{% url 'account:favorite_toggle' publication.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit">Добавить/убрать из избранного</button></form>{% endif %}
+</article>
+{% endblock %}

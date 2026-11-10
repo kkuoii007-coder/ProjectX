@@ -1,0 +1,23 @@
+[Unit]
+Description=Philosophy Reader web (Gunicorn)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=exec
+User=prdr
+Group=prdr
+WorkingDirectory=/opt/philosophy-reader
+EnvironmentFile=/etc/philosophy-reader/service.env
+ExecStart=/opt/philosophy-reader/venv/bin/gunicorn \
+  --workers 1 --threads 4 --timeout 60 \
+  --bind 127.0.0.1:8801 \
+  --access-logfile - --error-logfile - \
+  config.wsgi_static:handler
+Restart=on-failure
+RestartSec=5
+MemoryHigh=400M
+MemoryMax=600M
+
+[Install]
+WantedBy=multi-user.target

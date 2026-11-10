@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<h1>{{ collection.title_ru }}</h1><p>{{ collection.description_ru }}</p>{% for p in publications %}<article><h2><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru }}</a></h2></article>{% empty %}<p>Подборка пуста.</p>{% endfor %}{% endblock %}

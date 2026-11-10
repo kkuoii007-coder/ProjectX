@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<h1>{{ thinker.name_ru }}</h1><p lang="en">{{ thinker.name_en }}</p>{% for p in publications %}<article><h2><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru }}</a></h2></article>{% empty %}<p>Материалов пока нет.</p>{% endfor %}{% endblock %}
