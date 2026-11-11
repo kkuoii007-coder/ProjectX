@@ -156,6 +156,16 @@ curl -s http://127.0.0.1:8801/health/
 сейчас отдаётся Gunicorn'ом через `config.wsgi_static` — временно, до
 настройки nginx; тогда `wsgi_static` удаляется, а `/static/` уходит прокси.
 
+## Frontend
+
+Дизайн «Глосса на полях»: Django-шаблоны, один файл `static/css/main.css`
+(токены в `:root`), `static/js/reader.js` (vanilla, без зависимостей) и два
+self-hosted шрифта под лицензией OFL — Literata и Golos Text
+(`static/fonts/`, тексты лицензий рядом). Node, сборщик, CDN и внешние запросы
+не нужны; страницы работают без JS. Правила — в `AGENTS.md`, раздел Frontend.
+Эталонные страницы: главная и читалка; остальные наследуют общий `base.html`
+и стили, но не переработаны.
+
 ## Проверки
 
 ```bash

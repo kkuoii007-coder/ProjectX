@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_protect
@@ -7,7 +7,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.operations.models import Report
 
-from .models import Collection, Publication, Thinker
+from .models import Collection, Favorite, Publication, Thinker
+from .presenters import outline, pick_specimen, reader_parts, reader_terms
 
 REPORT_CATEGORIES = {
     "factual_error": "Фактическая ошибка",
@@ -23,9 +24,28 @@ REPORTS_PER_USER_PER_DAY = 3
 
 @require_GET
 def home(request):
-    publications = Publication.objects.filter(status=Publication.Status.PUBLISHED).select_related("revision", "thinker")[:6]
-    collections = Collection.objects.prefetch_related("publications")[:5]
-    return render(request, "library/home.html", {"publications": publications, "collections": collections})
+    published = Publication.objects.filter(status=Publication.Status.PUBLISHED)
+    publications = list(published.select_related("revision", "thinker").order_by("-published_at", "slug")[:6])
+    featured = None
+    if publications:
+        payload = publications[0].revision.payload
+        parts = reader_parts(payload)
+        featured = {"publication": publications[0], "outline": outline(payload), "specimen": pick_specimen(parts)}
+    others = [{"publication": p, "outline": outline(p.revision.payload)} for p in publications[1:]]
+    collections = (
+        Collection.objects.annotate(published_count=Count("publications", filter=Q(publications__status=Publication.Status.PUBLISHED)))
+        .filter(published_count__gt=0)[:5]
+    )
+    thinkers = Thinker.objects.filter(publications__status=Publication.Status.PUBLISHED).distinct().order_by("name_ru")[:12]
+    context = {
+        "featured": featured,
+        "others": others,
+        "collections": collections,
+        "thinkers": thinkers,
+        "costs": settings.CREDIT_COSTS,
+        "welcome": settings.WELCOME_CREDITS,
+    }
+    return render(request, "library/home.html", context)
 
 
 @require_GET
@@ -40,7 +60,17 @@ def library(request):
 @require_GET
 def read(request, slug):
     publication = get_object_or_404(Publication.objects.select_related("revision", "thinker"), slug=slug, status=Publication.Status.PUBLISHED)
-    return render(request, "library/read.html", {"publication": publication, "parts": publication.revision.payload.get("parts", [])})
+    payload = publication.revision.payload
+    is_favorite = request.user.is_authenticated and Favorite.objects.filter(user=request.user, publication=publication).exists()
+    context = {
+        "publication": publication,
+        "parts": reader_parts(payload),
+        "outline": outline(payload),
+        "terms": reader_terms(payload),
+        "is_favorite": is_favorite,
+        "report_categories": REPORT_CATEGORIES,
+    }
+    return render(request, "library/read.html", context)
 
 
 @require_GET

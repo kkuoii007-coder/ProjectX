@@ -3,30 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Philosophy Reader{% endblock %}</title>
+  <meta name="theme-color" content="#f5f4f0">
+  <title>{% block title %}Philosophy Reader — философия на простом английском{% endblock %}</title>
+  <meta name="description" content="{% block description %}Философские тексты на простом английском с переводом каждого предложения по нажатию и личной ИИ-мастерской.{% endblock %}">
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="preload" href="{% static 'fonts/literata-latin-opsz-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{% static 'fonts/literata-cyrillic-opsz-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{% static 'fonts/golos-text-cyrillic-wght-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
   <script defer src="{% static 'js/reader.js' %}"></script>
 </head>
-<body>
-<header class="site-header">
-  <a class="brand" href="{% url 'library:home' %}">Philosophy Reader</a>
-  <nav aria-label="Основная навигация">
-    <a href="{% url 'library:library' %}">Библиотека</a>
-    <a href="{% url 'library:credits_help' %}">Как работают кредиты</a>
-    {% if user.is_authenticated %}
-      <a href="{% url 'account:dashboard' %}">Кабинет</a>
-      {% if wallet %}<a href="{% url 'account:credits' %}" class="balance">Доступно: {{ wallet.available_credits }}{% if wallet.reserved_credits %} · в работе {{ wallet.reserved_credits }}{% endif %}</a>{% endif %}
-      <form method="post" action="{% url 'accounts:logout' %}" class="inline">{% csrf_token %}<button class="link" type="submit">Выйти</button></form>
-    {% else %}
-      <a href="{% url 'accounts:login' %}">Войти</a>
-      <a href="{% url 'accounts:register' %}">Регистрация</a>
+<body class="{% block body_class %}{% endblock %}">
+<a class="skip-link" href="#main">К содержанию</a>
+<header class="site-header" id="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="{% url 'library:home' %}" aria-label="Philosophy Reader — на главную">
+      <span class="brand__mark" aria-hidden="true">¶</span>
+      <span class="brand__name">Philosophy <em>Reader</em></span>
+    </a>
+    {% if user.is_authenticated and wallet %}
+    <a href="{% url 'account:credits' %}" class="balance" aria-label="Доступно кредитов: {{ wallet.available_credits }}{% if wallet.reserved_credits %}, в работе: {{ wallet.reserved_credits }}{% endif %}">
+      <span class="balance__label">Доступно</span>
+      <strong class="balance__value">{{ wallet.available_credits }}</strong>
+      {% if wallet.reserved_credits %}<span class="balance__reserved">· в работе {{ wallet.reserved_credits }}</span>{% endif %}
+    </a>
     {% endif %}
-  </nav>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Меню</button>
+    <nav class="site-nav" id="site-nav" aria-label="Основная навигация">
+      <a href="{% url 'library:library' %}">Библиотека</a>
+      <a href="{% url 'library:home' %}#workshop">Мастерская</a>
+      <a href="{% url 'library:credits_help' %}">Как работают кредиты</a>
+      {% if user.is_authenticated %}
+        <a href="{% url 'account:dashboard' %}">Кабинет</a>
+        <form method="post" action="{% url 'accounts:logout' %}" class="inline">{% csrf_token %}<button class="link" type="submit">Выйти</button></form>
+      {% else %}
+        <a href="{% url 'accounts:login' %}">Войти</a>
+        <a class="btn btn--small" href="{% url 'accounts:register' %}">Регистрация</a>
+      {% endif %}
+    </nav>
+  </div>
 </header>
-<main>
-{% if messages %}<div aria-live="polite">{% for message in messages %}<p class="notice {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+<main id="main">
+{% if messages %}<div class="notices" aria-live="polite">{% for message in messages %}<p class="notice {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
-<footer><p>Материалы предназначены для знакомства с философией и не гарантируют отсутствия ошибок. <a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p></footer>
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <p class="site-footer__mark" aria-hidden="true">¶</p>
+    <p class="site-footer__note">Материалы предназначены для знакомства с философией и не гарантируют отсутствия ошибок. <a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p>
+    <p class="site-footer__colophon">Набрано шрифтами Literata и Golos Text (SIL Open Font License).</p>
+  </div>
+</footer>
 </body>
 </html>
