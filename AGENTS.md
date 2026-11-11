@@ -46,8 +46,8 @@ margin (right margin at >=82rem, under the sentence on narrow screens).
   stay usable without JS: translations visible, menu expanded.
 - `templates/base.html`; page templates in `templates/<app>/`. Reader markup:
   `span.s[role=button][tabindex=0][aria-expanded][aria-controls]` +
-  `span.gloss[role=note][lang=ru]`. `.sentence/.translation` is legacy markup
-  still used by `workshop/project.html`.
+  `span.gloss[role=note][lang=ru]`. This markup is used on the reader and on
+  `workshop/project.html`; the old `.sentence/.translation` markup is gone.
 - View-only context builders live in `apps/library/presenters.py`; template
   helpers in `apps/library/templatetags/ui.py`.
 - UI must not offer actions that do not exist (no dead buttons, no invented

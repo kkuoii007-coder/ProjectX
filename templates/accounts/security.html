@@ -1,2 +1,46 @@
 {% extends 'base.html' %}
-{% block content %}<h1>Безопасность</h1><section><h2>Смена пароля</h2><form method="post" action="{% url 'account:change_password' %}">{% csrf_token %}<p><label for="current">Текущий пароль</label><input id="current" name="current_password" type="password" required></p><p><label for="new">Новый пароль</label><input id="new" name="new_password" type="password" minlength="12" maxlength="128" required></p><p><label for="new2">Повторите новый пароль</label><input id="new2" name="new_password_confirm" type="password" required></p><button type="submit">Сменить пароль и отозвать другие сеансы</button></form></section><section><h2>Сеансы</h2><form method="post" action="{% url 'accounts:logout_all' %}">{% csrf_token %}<button type="submit">Выйти из всех сеансов</button></form></section><section class="warning"><h2>Деактивация аккаунта</h2><p>Восстановления нет. Окончательная очистка приватных данных выполняется отдельной операцией.</p><form method="post" action="{% url 'account:delete' %}">{% csrf_token %}<p><label for="delete-password">Подтвердите текущий пароль</label><input id="delete-password" name="password" type="password" required></p><button type="submit">Деактивировать аккаунт</button></form></section>{% endblock %}
+{% block content %}
+<div class="page-head">
+    <p class="kicker">Кабинет</p>
+    <h1>Безопасность</h1>
+</div>
+<div class="wrap">
+    <nav class="account-nav" aria-label="Разделы кабинета">
+        <a href="{% url 'account:credits' %}">Кредиты</a>
+        <a href="{% url 'account:favorites' %}">Избранное</a>
+        <a href="{% url 'account:words' %}">Слова</a>
+        <a href="{% url 'account:export' %}">Экспорт данных</a>
+    </nav>
+    <section class="account-section">
+        <h2 class="section-title">Смена пароля</h2>
+        <form method="post" action="{% url 'account:change_password' %}">{% csrf_token %}
+            <p><label for="current">Текущий пароль</label>
+                <input id="current" name="current_password" type="password" required>
+            </p>
+            <p><label for="new">Новый пароль</label>
+                <input id="new" name="new_password" type="password" minlength="12" maxlength="128" required>
+            </p>
+            <p><label for="new2">Повторите новый пароль</label>
+                <input id="new2" name="new_password_confirm" type="password" required>
+            </p>
+            <button type="submit">Сменить пароль и отозвать другие сеансы</button>
+        </form>
+    </section>
+    <section class="account-section">
+        <h2 class="section-title">Сеансы</h2>
+        <form method="post" action="{% url 'accounts:logout_all' %}" class="inline">{% csrf_token %}
+            <button type="submit" class="btn btn--ghost">Выйти из всех сеансов</button>
+        </form>
+    </section>
+    <section class="account-section warning">
+        <h2>Деактивация аккаунта</h2>
+        <p>Восстановления нет. Окончательная очистка приватных данных выполняется отдельной операцией.</p>
+        <form method="post" action="{% url 'account:delete' %}">{% csrf_token %}
+            <p><label for="delete-password">Подтвердите текущий пароль</label>
+                <input id="delete-password" name="password" type="password" required>
+            </p>
+            <button type="submit">Деактивировать аккаунт</button>
+        </form>
+    </section>
+</div>
+{% endblock %}

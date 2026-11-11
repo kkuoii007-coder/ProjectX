@@ -1,2 +1,11 @@
 {% extends 'base.html' %}
-{% block content %}<h1>Регистрация закрыта</h1><p>Библиотека и готовые переводы доступны без аккаунта.</p>{% endblock %}
+{% block content %}
+<div class="page-head">
+    <p class="kicker">Регистрация</p>
+    <h1>Регистрация закрыта</h1>
+    <p class="meta">Библиотека и готовые переводы доступны без аккаунта.</p>
+</div>
+<div class="wrap">
+    <p><a class="btn" href="{% url 'library:home' %}">В библиотеку</a></p>
+</div>
+{% endblock %}

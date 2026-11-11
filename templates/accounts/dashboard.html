@@ -1,2 +1,61 @@
 {% extends 'base.html' %}
-{% block content %}<h1>Кабинет</h1><nav class="account-nav"><a href="{% url 'account:credits' %}">Кредиты</a><a href="{% url 'account:favorites' %}">Избранное</a><a href="{% url 'account:words' %}">Слова</a><a href="{% url 'account:security' %}">Безопасность</a><a href="{% url 'account:export' %}">Экспорт данных</a></nav><section><h2>Проекты</h2>{% for p in projects %}<article class="card"><h3><a href="{% url 'workshop:project' p.pk %}">{{ p.title }}</a></h3><p>{{ p.get_mode_display }}</p></article>{% empty %}<p>Проектов пока нет.</p>{% endfor %}</section><section><h2>История задач</h2><table><thead><tr><th>Создана</th><th>Тип</th><th>Статус</th><th>Этап</th><th>Результат</th></tr></thead><tbody>{% for j in jobs %}<tr><td>{{ j.created_at }}</td><td>{{ j.kind }}</td><td aria-live="polite">{{ j.status }}</td><td>{{ j.stage }}</td><td>{% if j.error_code %}{{ j.error_code }}{% else %}{{ j.outcome|default:'—' }}{% endif %}</td></tr>{% endfor %}</tbody></table></section>{% endblock %}
+{% block content %}
+<div class="page-head">
+    <p class="kicker">Кабинет</p>
+    <h1>Ваши тексты и задачи</h1>
+</div>
+<div class="wrap">
+    <nav class="account-nav" aria-label="Разделы кабинета">
+        <a href="{% url 'account:credits' %}">Кредиты</a>
+        <a href="{% url 'account:favorites' %}">Избранное</a>
+        <a href="{% url 'account:words' %}">Слова</a>
+        <a href="{% url 'account:security' %}">Безопасность</a>
+        <a href="{% url 'account:export' %}">Экспорт данных</a>
+    </nav>
+    <section>
+        <h2 class="section-title">Проекты</h2>
+        <div class="cards">
+            {% for p in projects %}
+            <article class="card">
+                <h3><a href="{% url 'workshop:project' p.pk %}">{{ p.title }}</a></h3>
+                <p class="meta">{{ p.get_mode_display }}</p>
+            </article>
+            {% empty %}
+            <div class="empty-state">
+                <p>Проектов пока нет.</p>
+                <p><a class="btn" href="{% url 'library:home' %}#workshop">Создать первый текст</a></p>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    <section style="margin-top: var(--s-7);">
+        <h2 class="section-title">История задач</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Создана</th>
+                    <th>Тип</th>
+                    <th>Статус</th>
+                    <th>Этап</th>
+                    <th>Результат</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for j in jobs %}
+                <tr>
+                    <td>{{ j.created_at }}</td>
+                    <td>{{ j.kind }}</td>
+                    <td aria-live="polite">{{ j.status }}</td>
+                    <td>{{ j.stage }}</td>
+                    <td>{% if j.error_code %}{{ j.error_code }}{% else %}{{ j.outcome|default:'—' }}{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5">Задач ещё нет.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

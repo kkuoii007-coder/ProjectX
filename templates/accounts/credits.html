@@ -1,2 +1,55 @@
 {% extends 'base.html' %}
-{% block content %}<h1>Кредиты</h1><p class="balance-large">Доступно: {{ wallet.available_credits }}</p><p>В работе: {{ wallet.reserved_credits }} · Всего: {{ wallet.total_credits }}</p><p><a href="{% url 'library:credits_help' %}">Правила расхода</a></p><div class="muted-box"><h2>Пополнение</h2><p>Продажи не включены. В закрытом тесте владелец начисляет кредиты вручную. После пополнения сохранённый запрос нужно отправить повторно самостоятельно.</p></div><h2>История</h2><table><thead><tr><th>Дата</th><th>Операция</th><th>Сумма</th><th>Причина</th></tr></thead><tbody>{% for t in transactions %}<tr><td>{{ t.created_at }}</td><td>{{ t.kind }}</td><td>{{ t.signed_amount }}</td><td>{{ t.reason }}</td></tr>{% endfor %}</tbody></table>{% endblock %}
+{% block content %}
+<div class="page-head">
+    <p class="kicker">Кабинет</p>
+    <h1>Кредиты</h1>
+</div>
+<div class="wrap">
+    <nav class="account-nav" aria-label="Разделы кабинета">
+        <a href="{% url 'account:favorites' %}">Избранное</a>
+        <a href="{% url 'account:words' %}">Слова</a>
+        <a href="{% url 'account:security' %}">Безопасность</a>
+        <a href="{% url 'account:export' %}">Экспорт данных</a>
+    </nav>
+    <section class="account-section">
+        <h2 class="section-title">Баланс</h2>
+        <p class="balance-figure"><strong>{{ wallet.available_credits }} <small>доступно · в работе {{
+                    wallet.reserved_credits }} · всего {{ wallet.total_credits }}</small></strong></p>
+        <p class="meta"><a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p>
+    </section>
+    <section class="account-section">
+        <h2 class="section-title">Пополнение</h2>
+        <div class="muted-box">
+            <p>Продажи не включены. В закрытом тесте владелец начисляет кредиты вручную. После пополнения сохранённый
+                запрос нужно отправить повторно самостоятельно.</p>
+        </div>
+    </section>
+    <section class="account-section" style="max-width: none;">
+        <h2 class="section-title">История</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Операция</th>
+                    <th>Сумма</th>
+                    <th>Причина</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in transactions %}
+                <tr>
+                    <td>{{ t.created_at }}</td>
+                    <td>{{ t.kind }}</td>
+                    <td>{{ t.signed_amount }}</td>
+                    <td>{{ t.reason }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4">Операций пока нет.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

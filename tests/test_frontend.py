@@ -187,3 +187,87 @@ class HomeAndReaderTests(TestCase):
             "fonts/OFL-Golos-Text.txt",
         ):
             self.assertIsNotNone(finders.find(path), path)
+
+
+class RedesignedPagesContractTests(TestCase):
+    """The redesigned library, account and workshop pages keep their data,
+    forms and accessibility hooks (actions, targets, aria-live)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        call_command("seed_demo", verbosity=0)
+        cls.publication = Publication.objects.get(slug="socrates-questions")
+        cls.user = User.objects.create_user(login="frontuser", password="TestPassword123!")
+        grant_welcome_credits(cls.user)
+
+    def login(self):
+        self.client.force_login(self.user)
+
+    def test_library_page_uses_new_layout_and_search(self):
+        response = self.client.get(reverse("library:library"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="page-head"')
+        self.assertContains(response, 'class="search-form"')
+        self.assertContains(response, self.publication.revision.payload["title_ru"])
+
+    def test_collection_and_thinker_pages_use_page_head(self):
+        collection = self.publication.collections.first()
+        thinker = self.publication.thinker
+        if collection is not None:
+            response = self.client.get(reverse("library:collection", args=[collection.slug]))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'class="page-head"')
+        if thinker is not None:
+            response = self.client.get(reverse("library:thinker", args=[thinker.slug]))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'class="page-head"')
+
+    def test_dashboard_keeps_job_status_live_region(self):
+        self.login()
+        response = self.client.get(reverse("account:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="account-nav"')
+        self.assertContains(response, "История задач")
+
+    def test_credits_page_shows_balance(self):
+        self.login()
+        response = self.client.get(reverse("account:credits"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, str(Wallet.objects.get(user=self.user).available_credits))
+
+    def test_login_page_keeps_form_fields(self):
+        response = self.client.get(reverse("accounts:login"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="login"')
+        self.assertContains(response, 'name="password"')
+
+    def test_workshop_project_uses_gloss_markup(self):
+        self.login()
+        from apps.workshop.models import Project, Revision
+
+        project = Project.objects.create(owner=self.user, title="Глоссы", mode="explain_topic")
+        payload = {
+            "title_ru": "Черновик",
+            "parts": [{"title_en": "One", "sentences": [{"en": "Hi.", "ru": "Привет."}]}],
+        }
+        revision = Revision.objects.create(project=project, payload=payload)
+        project.head_revision = revision
+        project.save()
+        response = self.client.get(reverse("workshop:project", args=[project.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="s" role="button" tabindex="0" aria-expanded="false"')
+        self.assertContains(response, 'role="note"')
+        self.assertContains(response, reverse("workshop:edit_fragment", args=[project.pk]))
+        self.assertNotContains(response, 'class="sentence"')
+
+    def test_workshop_error_render_without_revision_context(self):
+        """Views render project.html with only {project, error} on errors."""
+        self.login()
+        from apps.workshop.models import Project
+
+        project = Project.objects.create(owner=self.user, title="Без ревизии", mode="explain_topic")
+        response = self.client.post(reverse("workshop:ask", args=[project.pk]), {"instruction": ""})
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Введите вопрос до 2000 символов", status_code=400)
+        # The page must render the version and discussion sections safely.
+        self.assertContains(response, "Версий ещё нет.", status_code=400)

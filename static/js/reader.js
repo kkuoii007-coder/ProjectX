@@ -133,28 +133,7 @@
     doc.querySelectorAll('.part').forEach(function (part) { observer.observe(part); });
   }
 
-  // Legacy markup still used by the workshop page (not redesigned yet).
-  function initLegacySentences() {
-    doc.querySelectorAll('.sentence').forEach(function (sentence) {
-      var toggle = function () {
-        var translation = sentence.querySelector('.translation');
-        if (!translation) { return; }
-        translation.hidden = !translation.hidden;
-        sentence.setAttribute('aria-expanded', String(!translation.hidden));
-      };
-      sentence.addEventListener('click', function (event) {
-        if (event.target.closest('form, input, button, label')) { return; }
-        toggle();
-      });
-      sentence.addEventListener('keydown', function (event) {
-        if (event.target !== sentence) { return; }
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); }
-      });
-    });
-  }
-
   function init() {
-    initLegacySentences();
     initGlosses();
     initToggleAll();
     initMenu();

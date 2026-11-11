@@ -1,2 +1,20 @@
 {% extends 'base.html' %}
-{% block content %}<h1>{{ collection.title_ru }}</h1><p>{{ collection.description_ru }}</p>{% for p in publications %}<article><h2><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru }}</a></h2></article>{% empty %}<p>Подборка пуста.</p>{% endfor %}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <p class="kicker">Подборка</p>
+    <h1>{{ collection.title_ru }}</h1>
+    <p class="meta">{{ collection.description_ru }}</p>
+</div>
+<div class="wrap">
+    <div class="cards">
+        {% for p in publications %}
+        <article class="publication-card">
+            <h2 class="publication-card__title"><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru
+                    }}</a></h2>
+        </article>
+        {% empty %}
+        <p>Подборка пуста.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

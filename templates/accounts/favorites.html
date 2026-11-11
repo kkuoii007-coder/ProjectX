@@ -1,2 +1,26 @@
 {% extends 'base.html' %}
-{% block content %}<h1>Избранное</h1>{% for f in favorites %}<article class="card"><h2><a href="{% url 'library:read' f.publication.slug %}">{{ f.publication.revision.payload.title_ru }}</a></h2><form method="post" action="{% url 'account:favorite_toggle' f.publication.pk %}">{% csrf_token %}<button type="submit">Удалить из избранного</button></form></article>{% empty %}<p>Избранных материалов пока нет.</p>{% endfor %}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <p class="kicker">Кабинет</p>
+    <h1>Избранное</h1>
+</div>
+<div class="wrap">
+    <div class="cards">
+        {% for f in favorites %}
+        <article class="card">
+            <h2><a href="{% url 'library:read' f.publication.slug %}">{{ f.publication.revision.payload.title_ru }}</a>
+            </h2>
+            <form method="post" action="{% url 'account:favorite_toggle' f.publication.pk %}" class="inline">{%
+                csrf_token %}
+                <button type="submit" class="btn btn--ghost btn--small">Удалить из избранного</button>
+            </form>
+        </article>
+        {% empty %}
+        <div class="empty-state">
+            <p>Избранных материалов пока нет.</p>
+            <p><a class="btn" href="{% url 'library:home' %}">В библиотеку</a></p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
