@@ -158,13 +158,20 @@ curl -s http://127.0.0.1:8801/health/
 
 ## Frontend
 
-Дизайн «Глосса на полях»: Django-шаблоны, один файл `static/css/main.css`
-(токены в `:root`), `static/js/reader.js` (vanilla, без зависимостей) и два
-self-hosted шрифта под лицензией OFL — Literata и Golos Text
-(`static/fonts/`, тексты лицензий рядом). Node, сборщик, CDN и внешние запросы
-не нужны; страницы работают без JS. Правила — в `AGENTS.md`, раздел Frontend.
-Эталонные страницы: главная и читалка; остальные наследуют общий `base.html`
-и стили, но не переработаны.
+Дизайн «Глосса на полях» применён ко всем страницам проекта. Django-шаблоны,
+один файл `static/css/main.css` (токены в `:root`), `static/js/reader.js`
+(vanilla, без зависимостей) и два self-hosted шрифта под лицензией OFL —
+Literata и Golos Text (`static/fonts/`, тексты лицензий рядом). Node,
+сборщик, CDN и внешние запросы не нужны; страницы работают без JS. Правила —
+в `AGENTS.md`, раздел Frontend.
+
+Перевод — заметка на полях: `span.s[role=button]` + `span.gloss[role=note]`
+(справа на широких экранах ≥82rem, под предложением на узких). Разметка
+используется и в читалке, и в мастерской (`workshop/project.html`); старая
+`.sentence/.translation` удалена. Тёмная лента «Мастерская» — общая для
+главной и страниц мастерской. Библиотека (каталог, подборки, мыслители),
+кабинет, авторизация и справка о кредитах переведены на общие секции
+(`.page-head`, `.account-nav`, `.publication-card` и т.д.).
 
 ## Проверки
 
@@ -189,7 +196,7 @@ venv/bin/python manage.py check
 | `export_user_data` | JSON-выгрузка данных пользователя: `--login [--output]` |
 | `purge_user_data` | Удаление аккаунта и приватных данных: `--login --reason` (ledger сохраняется) |
 
-## Известные ограничения (после этапа 9)
+## Известные ограничения (после frontend-редизайна)
 
 - Живой генератор — Claude Sonnet 5.5 через OpenRouter; FakeProvider остаётся
   для dev/test. Review-модель та же (Haiku 5.5 — кандидат на будущее, в 20 раз
@@ -203,5 +210,10 @@ venv/bin/python manage.py check
   не покрыт end-to-end.
 - nginx/HTTPS/публичный доступ не настроены (loopback only) — отдельный
   согласованный шаг после правового и платёжного контура.
+- `STATICFILES_STORAGE = ManifestStaticFilesStorage` в `config/settings/prod.py`
+  не действует в Django 5.2 (нужен dict `STORAGES`); манифеста нет, ссылки на
+  статику без хэшей — доредизайнное поведение, к редизайну не относится.
+- Визуальная проверка редизайна «глазами» (скриншоты сняты, не просмотрены),
+  реальные Safari/Firefox и скринридеры не проверялись.
 
 Подробный журнал: `docs/IMPLEMENTATION_LOG.md`.
