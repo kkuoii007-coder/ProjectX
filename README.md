@@ -155,6 +155,21 @@ curl -s http://127.0.0.1:8801/health/
 где вместе с PostgreSQL и Docker (Hermes) запас памяти небольшой. Статика
 сейчас отдаётся Gunicorn'ом через `config.wsgi_static` — временно, до
 настройки nginx; тогда `wsgi_static` удаляется, а `/static/` уходит прокси.
+`wsgi_static` отдаёт собранные hashed-файлы из `STATIC_ROOT`
+(`ManifestStaticFilesStorage` через dict `STORAGES`, Django 5.2).
+
+## Резервное копирование
+
+Ежедневный логический дамп БД (pg_dump, custom-формат, сжатие) в
+`/var/backups/philosophy-reader/` (0700 postgres), retention 7 дней.
+Скрипт: `deploy/backup-philosophy-reader.sh` (установлен в
+`/usr/local/sbin/backup-philosophy-reader`), расписание:
+`deploy/philosophy-reader-backup.cron` → `/etc/cron.d/` (03:35 UTC,
+лог `/var/log/philosophy-reader-backup.log`). Восстановление:
+
+```bash
+sudo -u postgres pg_restore -c -U philosophy_reader -d philosophy_reader <файл>
+```
 
 ## Frontend
 
@@ -210,9 +225,6 @@ venv/bin/python manage.py check
   не покрыт end-to-end.
 - nginx/HTTPS/публичный доступ не настроены (loopback only) — отдельный
   согласованный шаг после правового и платёжного контура.
-- `STATICFILES_STORAGE = ManifestStaticFilesStorage` в `config/settings/prod.py`
-  не действует в Django 5.2 (нужен dict `STORAGES`); манифеста нет, ссылки на
-  статику без хэшей — доредизайнное поведение, к редизайну не относится.
 - Визуальная проверка редизайна «глазами» (скриншоты сняты, не просмотрены),
   реальные Safari/Firefox и скринридеры не проверялись.
 

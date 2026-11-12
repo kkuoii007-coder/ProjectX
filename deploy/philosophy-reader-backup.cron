@@ -1,0 +1,7 @@
+# Daily logical backup of the philosophy_reader database.
+# Install as /etc/cron.d/philosophy-reader-backup (root-owned, 0644).
+# Dumps go to /var/backups/philosophy-reader (0700), retention 7 days.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+35 3 * * * root sudo -u postgres /usr/local/sbin/backup-philosophy-reader >> /var/log/philosophy-reader-backup.log 2>&1

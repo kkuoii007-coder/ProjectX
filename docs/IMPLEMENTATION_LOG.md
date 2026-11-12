@@ -285,3 +285,38 @@ search на библиотеке, кабинет, кредиты, логин, г
 инструкция → 400 с корректным рендером ошибки.
 Не проверено: визуальная оценка «глазами» (скриншоты сняты, не просмотрены),
 реальные браузеры Safari/Firefox, скринридеры.
+
+## Production hardening (выполнен 12 ноября 2026)
+
+Цель — закрыть технические дефекты прод-готовности до решения владельца
+о публичном доступе (nginx/HTTPS/домен остаются отложенным шагом).
+
+- `config/settings/prod.py`: недействующий в Django 5.2
+  `STATICFILES_STORAGE = ManifestStaticFilesStorage` заменён на dict
+  `STORAGES` (default → FileSystemStorage, staticfiles →
+  ManifestStaticFilesStorage). Добавлен явный `LOGGING` (root INFO,
+  `django.request` ERROR → stderr): при DEBUG=False ошибки приложения
+  теперь видны в journalctl юнитов web/worker.
+- `config/wsgi_static.py`: stock `StaticFilesHandler` резолвит URL через
+  finders (исходные директории) и не видит post-processed hashed-файлов в
+  `STATIC_ROOT`; хендлер заменён на отдачу напрямую из `STATIC_ROOT`
+  (`django.views.static.serve` с `document_root=STATIC_ROOT`). Манифест-URL
+  (`css/main.<hash>.css`, шрифты, `reader.js`) отдаются корректно.
+- `collectstatic --clear` с prod-настройками: 137 файлов post-processed,
+  создан `staticfiles/staticfiles.json`; страницы ссылаются на hashed-URL.
+- Ежедневный бэкап БД: `deploy/backup-philosophy-reader.sh` (pg_dump,
+  custom-формат, 0700) → `/var/backups/philosophy-reader/`, retention 7
+  дней, запуск от `postgres` (peer auth) через
+  `/etc/cron.d/philosophy-reader-backup` в 03:35 UTC, лог
+  `/var/log/philosophy-reader-backup.log`. Первый дамп снят и проверен
+  (`pg_restore --list`: 141 объектов TABLE DATA/SEQUENCE, 568 КБ).
+- Проверки: 102 теста OK; `check` и `check --deploy` (prod) — только 3
+  ожидаемых HTTPS-warning (HSTS subdomains/preload, SSL_REDIRECT), они
+  включаются при появлении публичного домена; рестарт web+worker, health
+  `{"web":"ok","database":"ok","vector":"ok"}`; smoke 200: главная,
+  библиотека, читалка, справка о кредитах, логин, admin; все hashed-статик
+  ресурсы со страниц 200; ошибок в journalctl web/worker нет.
+- Изменено серверное окружение вне репозитория:
+  `/usr/local/sbin/backup-philosophy-reader` (копия скрипта),
+  `/etc/cron.d/philosophy-reader-backup`, каталог
+  `/var/backups/philosophy-reader` (postgres:postgres 0700).
