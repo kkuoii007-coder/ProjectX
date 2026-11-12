@@ -65,7 +65,7 @@
     var openCount = doc.querySelectorAll('.reader .s.is-open').length;
     var everythingOpen = all.length > 0 && openCount === all.length;
     toggleAll.setAttribute('aria-pressed', String(everythingOpen));
-    toggleAll.textContent = everythingOpen ? 'Скрыть все переводы' : 'Показать все переводы';
+    toggleAll.textContent = everythingOpen ? 'Скрыть переводы' : 'Показать переводы';
   }
 
   function initToggleAll() {

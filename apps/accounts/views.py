@@ -61,6 +61,9 @@ def _within_registration_limits(request):
 def register(request):
     if settings.REGISTRATION_MODE == "closed":
         return render(request, "accounts/registration_closed.html", status=403)
+    # A successful POST re-renders this page with an explicit success notice:
+    # the reader must see clear confirmation that the account exists.
+    registered_user = None
     form = RegisterForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         if not _within_registration_limits(request):
@@ -81,8 +84,13 @@ def register(request):
                 invite.used_at = timezone.now()
                 invite.save(update_fields=["used_by", "used_at"])
         login(request, user, backend="apps.accounts.backends.LoginBackend")
-        messages.success(request, f"Вам начислено {settings.WELCOME_CREDITS} бесплатных кредитов")
-        return redirect("account:dashboard")
+        registered_user = user
+    if registered_user is not None:
+        return render(
+            request,
+            "accounts/register_success.html",
+            {"registered_login": registered_user.login, "welcome_credits": settings.WELCOME_CREDITS},
+        )
     return render(request, "accounts/register.html", {"form": form})
 
 

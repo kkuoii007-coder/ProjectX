@@ -1687,6 +1687,15 @@ th {
   margin: var(--s-5) 0;
 }
 
+.success-box {
+  margin: var(--s-5) 0;
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--radius);
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+  border: 1px solid #b9d5c1;
+}
+
 /* ---- workshop pages (night band, like home) ------------------------------------------ */
 .workshop-page {
   background: var(--night);
