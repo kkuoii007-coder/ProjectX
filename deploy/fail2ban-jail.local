@@ -1,0 +1,41 @@
+# Philosophy Reader VPS: fail2ban defaults + jails.
+# Install as /etc/fail2ban/jail.local.
+[DEFAULT]
+# Ban comes from nftables' own banaction set (uses nft, native).
+banaction = nftables-multiport
+banaction_allports = nftables-allports
+# Aggressive defaults: brute force should not get a second chance.
+bantime = 1h
+findtime = 10m
+maxretry = 5
+bantime.increment = true
+bantime.factor = 2
+bantime.maxtime = 1w
+# Never ban these (loopback + our own subnets).
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+mode = aggressive
+# Aggressive mode bans on pre-auth probes as well (cipher/protocol scanning).
+maxretry = 3
+findtime = 10m
+
+[nginx-http-auth]
+enabled = true
+filter = nginx-http-auth
+logpath = /var/log/nginx/error.log
+maxretry = 5
+
+[nginx-badbots]
+enabled = false
+
+[nginx-botsearch]
+enabled = true
+logpath = /var/log/nginx/access.log
+maxretry = 2
+
+[nginx-limit-req]
+enabled = true
+logpath = /var/log/nginx/error.log
+maxretry = 10

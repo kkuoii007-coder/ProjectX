@@ -138,7 +138,40 @@ venv/bin/python manage.py seed_demo
 venv/bin/python manage.py runserver 127.0.0.1:8000
 ```
 
-## Production-подобный запуск (loopback, Hermes не затрагивается)
+## Публичный доступ (HTTPS по IP, 12 ноября 2026)
+
+Сайт отдаётся nginx'ом наружу по IP `https://185.112.100.238` и
+`https://[2a0c:5d00:2002::7e23:46b7]` (домена пока нет). HTTP (80)
+редиректит на HTTPS. Сертификат self-signed (SAN: оба IP, 10 лет,
+`deploy/openssl-san.cnf`), браузер покажет предупреждение — это ожидаемо
+до появления домена (тогда можно выпустить Let's Encrypt).
+
+- nginx: TLS-терминация (TLS 1.2/1.3), proxy к Gunicorn 127.0.0.1:8801,
+  статика из `STATIC_ROOT` с `Cache-Control: public, immutable`
+  (hashed-имена), `limit_req` на login/register/admin (6 r/m) и общий
+  (30 r/m), security-заголовки (HSTS+includeSubDomains, nosniff, DENY,
+  Referrer-Policy), `client_max_body_size 6m`. Конфиг:
+  `deploy/nginx-philosophy-reader.conf` → `/etc/nginx/sites-enabled/`.
+- Gunicorn работает с `config.wsgi:application`; `wsgi_static` удалён.
+- Django prod: `SECURE_PROXY_SSL_HEADER`, `SECURE_SSL_REDIRECT=true`,
+  `CSRF_TRUSTED_ORIGINS` по IP, HSTS includeSubDomains+preload.
+  `DJANGO_ALLOWED_HOSTS`/`DJANGO_CSRF_TRUSTED_ORIGINS`/`DJANGO_SECURE_SSL_REDIRECT`
+  заданы в `/etc/philosophy-reader/service.env` (бэкап `service.env.bak-20261112`).
+
+## Защита сервера (12 ноября 2026)
+
+- SSH: парольная аутентификация отключена (удалён cloud-init override
+  `/etc/ssh/sshd_config.d/50-cloud-init.conf`), только ключи; root по
+  ключу (prohibit-password). Вход на сервер — только по ed25519-ключу.
+- nftables (`deploy/nftables.conf` → `/etc/nftables.conf`, включён):
+  default-drop на входе, разрешены 22/80/443, loopback, established,
+  ICMP/NDP. Docker-сети (172.17/172.22, Hermes) не затрагиваются.
+- fail2ban: sshd (aggressive, 3 попытки → ban 1h с эскалацией до 1w),
+  nginx-http-auth, nginx-botsearch, nginx-limit-req (бан за 10 срабатываний
+  лимита). Конфиг: `deploy/fail2ban-jail.local` → `/etc/fail2ban/jail.local`.
+- `unattended-upgrades` активен (security-обновления автоматически).
+
+## Производственный запуск (loopback + nginx)
 
 Секреты БД/Django — в `/etc/philosophy-reader/service.env` (root:prdr, 0640),
 в `.env` проекта только `OPENROUTER_API_KEY`.
@@ -152,11 +185,9 @@ curl -s http://127.0.0.1:8801/health/
 
 Юнит-файлы лежат в `deploy/`. Web работает с `MemoryHigh=400M` (1 worker ×
 4 threads), worker — с `MemoryHigh=300M`; лимиты подобраны под VPS 2 GB,
-где вместе с PostgreSQL и Docker (Hermes) запас памяти небольшой. Статика
-сейчас отдаётся Gunicorn'ом через `config.wsgi_static` — временно, до
-настройки nginx; тогда `wsgi_static` удаляется, а `/static/` уходит прокси.
-`wsgi_static` отдаёт собранные hashed-файлы из `STATIC_ROOT`
-(`ManifestStaticFilesStorage` через dict `STORAGES`, Django 5.2).
+где вместе с PostgreSQL и Docker (Hermes) запас памяти небольшой.
+Статика отдаётся nginx'ом из `STATIC_ROOT` (hashed-имена через
+`ManifestStaticFilesStorage`, dict `STORAGES` в Django 5.2).
 
 ## Резервное копирование
 
@@ -170,6 +201,18 @@ curl -s http://127.0.0.1:8801/health/
 ```bash
 sudo -u postgres pg_restore -c -U philosophy_reader -d philosophy_reader <файл>
 ```
+
+## Off-site копии (подключение владельцем)
+
+Push-механика готова: `deploy/push-offsite-backup.sh` (установлен в
+`/usr/local/sbin/push-offsite-backup`) шифрует свежий дамп (AES-256,
+PBKDF2 600k) ключом `/etc/philosophy-reader/backup-encryption.key`
+и отправляет через rclone (`/etc/philosophy-reader/rclone.conf`,
+remote `philosophy-backup`) в `philosophy-reader/backups`. Cron
+`deploy/philosophy-reader-offsite.cron` (04:05 UTC) устанавливается
+после подключения хранилища владельцем — пошагово в
+`deploy/README-offsite-backup.md`. Ключ шифрования создан; храните
+его копию вне сервера (потеря ключа = потеря off-site бэкапов).
 
 ## Frontend
 
@@ -214,8 +257,13 @@ venv/bin/python manage.py check
 ## Известные ограничения (после frontend-редизайна)
 
 - Живой генератор — Claude Sonnet 5.5 через OpenRouter; FakeProvider остаётся
-  для dev/test. Review-модель та же (Haiku 5.5 — кандидат на будущее, в 20 раз
-  дешевле).
+  для dev/test. Review-модель — Claude Haiku 5.5 ($0.10/$0.50 за 1M токенов,
+  ~в 20 раз дешевле Sonnet) с 12 ноября 2026. Замечено: Haiku строже к
+  цитированию источников — часть заданий завершается `no_charge_failure`
+  с бесплатным объяснением вместо ревизии; это соответствует политике
+  качества (неподтверждённое не выдаётся за полезный текст), но снижает
+  долю успешных доставок. Если строчность окажется чрезмерной — вернуть
+  `AI_REVIEW_MODEL=anthropic/claude-sonnet-5.5` в service.env.
 - Веб-поиск и fetch выключены по умолчанию; SearchAdapter (внешний
   поисковый API) ещё не подключён — DocumentFetcher готов и покрыт тестами.
 - FTS сконфигурирован на 'english'; для русских запросов работает векторная

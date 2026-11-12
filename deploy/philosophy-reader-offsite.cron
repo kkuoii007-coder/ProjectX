@@ -1,0 +1,8 @@
+# Daily off-site push of the encrypted philosophy_reader dump.
+# Install as /etc/cron.d/philosophy-reader-offsite ONLY after the owner has
+# configured /etc/philosophy-reader/rclone.conf and the encryption key
+# (see deploy/README-offsite-backup.md).
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+05 4 * * * root /usr/local/sbin/push-offsite-backup 2>&1 | tee -a /var/log/philosophy-reader-offsite.log

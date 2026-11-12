@@ -320,3 +320,108 @@ search на библиотеке, кабинет, кредиты, логин, г
   `/usr/local/sbin/backup-philosophy-reader` (копия скрипта),
   `/etc/cron.d/philosophy-reader-backup`, каталог
   `/var/backups/philosophy-reader` (postgres:postgres 0700).
+
+## Публичный доступ и защита сервера (выполнены 12 ноября 2026)
+
+Решение владельца: открыть сайт по IP (домена нет), «не оставив шансов».
+
+### Аудит-предусловия
+
+- Репозиторий `github.com/kkuoii007-coder/ProjectX` публичный (HTTP 200),
+  но полная git-история обоих клонов не содержит `sk-or-` токенов;
+  `.env` никогда не коммитился (gitignore работает). Утечка ключа была
+  не в git, а в файле пакета спецификации на диске — ротация остаётся
+  на владельце.
+- До работ: парольный SSH был открыт через cloud-init override
+  (`PasswordAuthentication yes`), фаервола не было (INPUT ACCEPT),
+  nginx 1.24 установлен, но ничего не раздавал.
+
+### Защита ОС
+
+- SSH: удалён `/etc/ssh/sshd_config.d/50-cloud-init.conf`
+  (PasswordAuthentication no эффективно), `PermitRootLogin prohibit-password`.
+  Стабильность key-only входа подтверждена (сессии не рвутся, повторные
+  подключения проходят; probes по ssh-rsa отклоняются).
+- nftables (`deploy/nftables.conf` → `/etc/nftables.conf`, сервис включён):
+  input policy drop, разрешены loopback, established/related, 22/80/443,
+  ICMP (v4) и весь icmpv6 (NDP нужен для v6-связности), лог дропов
+  5/мин. Docker-сети Hermes (172.17.0.0/16, 172.22.0.0/16) не фильтруются
+  (контейнер hermes-gateway не публикует портов). Переживает restart
+  и загрузку (enabled).
+- fail2ban (`deploy/fail2ban-jail.local` → `/etc/fail2ban/jail.local`,
+  banaction nftables): sshd aggressive (3 попытки, ban 1h, эскалация ×2
+  до 1w), nginx-http-auth, nginx-botsearch, nginx-limit-req. Уже
+  забанил первых сканеров SSH (121.224.5.228, 222.210.35.197 и др.).
+- Проверено: наружу слушают только 22/80/443 (v4+v6); Postgres/Gunicorn/
+  docker-порты — loopback/private.
+
+### TLS и nginx
+
+- Self-signed сертификат на 10 лет (rsa 3072, SHA-256) с SAN
+  IP:185.112.100.238, IP:2a0c:5d00:2002::7e23:46b7, DNS:shults.ru
+  (`deploy/openssl-san.cnf`); ключ/серт в `/etc/philosophy-reader/tls/`
+  (0600/0644).
+- nginx (`deploy/nginx-philosophy-reader.conf` → sites-enabled):
+  80 → 301 → https; 443 ssl http2 (TLSv1.2/1.3, session cache,
+  tickets off, server_tokens off, OCSP stapling off — нет responder'а
+  для self-signed); proxy к 127.0.0.1:8801 с X-Forwarded-Proto;
+  статика из STATIC_ROOT с immutable; limit_req 6 r/m login/register/
+  admin-login и 30 r/m общий (429 при превышении); security-заголовки;
+  client_max_body_size 6m; ACME-заготовка на 80 для будущего домена.
+- Права: `chmod o+x /opt/philosophy-reader` — www-data получает доступ
+  на чтение staticfiles через путь (каталог проекта оставлен 0750 prdr).
+
+### Приложение
+
+- `config/settings/prod.py`: `SECURE_PROXY_SSL_HEADER`, HSTS
+  includeSubDomains+preload, `CSRF_TRUSTED_ORIGINS` (оба IP),
+  `SECURE_SSL_REDIRECT` через `DJANGO_SECURE_SSL_REDIRECT=true`
+  (в service.env; бэкап `service.env.bak-20261112`).
+- service.env: добавлены `DJANGO_ALLOWED_HOSTS` (оба IP + loopback) и
+  `DJANGO_CSRF_TRUSTED_ORIGINS`.
+- Юнит web переключён на `config.wsgi:application`; `config/wsgi_static.py`
+  удалён (контракт из README «после nginx» выполнен).
+- CSRF-поведение подтверждено: POST с корректным IP-origin и токеном →
+  200 (форма с ошибкой входа), с чужим Origin → 403.
+
+### Review-модель Haiku 5.5
+
+- `AI_REVIEW_MODEL=anthropic/claude-haiku-5.5` в service.env
+  ($0.10/$0.50 за 1M токенов — в 20× дешевле Sonnet 5.5 $2/$10);
+  цена валидирована против `AI_STAGE_PRICE_CEILINGS["review"]` (3/15).
+- Живой smoke через очередь: edit_sentence и ask jobs прошли полный
+  конвейер (generate/edit → review → repair → re-review), попытки
+  корректно регистрируются в ProviderAttempt c моделью haiku/sonnet,
+  бюджет учитывается; бюджет-гард сработал штатно при исчерпании
+  дневного лимита ($1) в ходе smoke-тестов ($0.94 израсходовано за
+  17 вызовов).
+- Наблюдение: Haiku строже к источникам — несколько заданий закрылись
+  `no_charge_failure` с бесплатным объяснением (по спеке: неподтверждённое
+  не выдаётся за полезный текст). Порог настраивается владельцем при
+  необходимости (вернуть Sonnet или усилить контекст карточек).
+
+### Off-site бэкапы
+
+- Механика: `deploy/push-offsite-backup.sh` (в `/usr/local/sbin/`)
+  шифрует свежий дамп AES-256-CBC/PBKDF2 600k итераций ключом
+  `/etc/philosophy-reader/backup-encryption.key` (0600, создан),
+  затем rclone copy в `philosophy-backup:philosophy-reader/backups`.
+- Roundtrip шифрования проверен локально: расшифрованный дамп идентичен
+  оригиналу (cmp), pg_restore видит 49 TABLE DATA.
+- Cron `deploy/philosophy-reader-offsite.cron` (04:05 UTC) и
+  пошаговая инструкция владельцу: `deploy/README-offsite-backup.md`.
+  Активация — после того как владелец создаст remote (S3/B2/SFTP)
+  через `rclone config --config /etc/philosophy-reader/rclone.conf`.
+
+### Полная верификация
+
+- 102 теста OK; `check` и `check --deploy` — 0 предупреждений (все
+  HTTPS-пункты закрыты).
+- Внешний smoke: https по v4 и v6 — 200 (главная/библиотека/читалка/
+  логин/статика), http → 301 → https; rate limit: 8-й POST подряд на
+  login получает 429; TLS 1.1 отклоняется, TLS 1.3 работает
+  (TLS_AES_256_GCM_SHA384).
+- Восстановление: дамп из каталога бэкапов развёрнут в тестовую БД
+  `pr_restore_test` (3 пользователя, 5 ревизий, 42 chunks) и удалена.
+- Сервисы после всех переключений: web/worker/maintenance/nftables/
+  fail2ban/nginx — active; память в пределах лимитов.

@@ -1,0 +1,22 @@
+# SAN config for the Philosophy Reader self-signed certificate.
+# No domain yet: the site is addressed by the VPS IP addresses.
+[req]
+distinguished_name = dn
+x509_extensions = v3_req
+prompt = no
+
+[dn]
+CN = 185.112.100.238
+O = Philosophy Reader
+C = RU
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = 185.112.100.238
+IP.2 = 2a0c:5d00:2002::7e23:46b7
+DNS.1 = shults.ru
