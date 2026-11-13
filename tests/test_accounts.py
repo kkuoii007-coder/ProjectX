@@ -20,7 +20,9 @@ class RegistrationTests(TestCase):
     def test_register_grants_credits_once(self):
         c = Client()
         resp = c.post("/accounts/register/", {"login": "newuser2", "password": "TestPassword123!", "password_confirm": "TestPassword123!", "no_recovery_ack": "on", "invite_code": "INV1"})
-        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Вы зарегистрированы")
+        self.assertContains(resp, "newuser2")
         user = User.objects.get(login="newuser2")
         self.assertEqual(Wallet.objects.get(user=user).total_credits, 30)
         # second POST with the same invite must not create a second account

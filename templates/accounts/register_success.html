@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="form-page">
+    <p class="kicker">Регистрация</p>
+    <h1>Аккаунт создан</h1>
+    <div class="success-box" role="status">
+        <p><strong>Вы зарегистрированы. Данные сохранены.</strong></p>
+        <p>Логин: <strong>{{ registered_login }}</strong>. Мы не запрашивали email или телефон, восстановление доступа
+            невозможно — сохраните логин и пароль в менеджере паролей прямо сейчас.</p>
+        <p>На баланс аккаунта начислено {{ welcome_credits }} бесплатных кредитов.</p>
+    </div>
+    <p class="form-page__actions">
+        <a class="btn" href="{% url 'account:dashboard' %}">Перейти в кабинет</a>
+        <a class="btn btn--ghost" href="{% url 'library:library' %}">Открыть библиотеку</a>
+    </p>
+</section>
+{% endblock %}

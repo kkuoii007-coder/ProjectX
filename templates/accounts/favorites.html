@@ -10,8 +10,7 @@
         <article class="card">
             <h2><a href="{% url 'library:read' f.publication.slug %}">{{ f.publication.revision.payload.title_ru }}</a>
             </h2>
-            <form method="post" action="{% url 'account:favorite_toggle' f.publication.pk %}" class="inline">{%
-                csrf_token %}
+            <form method="post" action="{% url 'account:favorite_toggle' f.publication.pk %}" class="inline">{% csrf_token %}
                 <button type="submit" class="btn btn--ghost btn--small">Удалить из избранного</button>
             </form>
         </article>

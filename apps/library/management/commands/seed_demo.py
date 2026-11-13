@@ -10,37 +10,33 @@ from apps.workshop.models import Project, Revision
 
 
 PAYLOAD = {
-    "title_ru": "Сократ: почему вопросы помогают мыслить",
-    "lead_ru": "Короткое введение в сократический метод: признание незнания, вопросы и проверка убеждений.",
+    "title_ru": "Сократ: зачем спрашивать и проверять",
+    "lead_ru": "Введение в сократический метод: признание незнания, вопросы вместо лекции, проверка убеждений.",
     "parts": [
         {
             "title_en": "A different kind of wisdom",
             "title_ru": "Другой вид мудрости",
             "sentences": [
-                {"en": "Socrates lived in Athens in the fifth century BCE.", "ru": "Сократ жил в Афинах в пятом веке до нашей эры."},
-                {"en": "He did not write books, so we know him mainly through other authors.", "ru": "Он не писал книг, поэтому мы знаем его главным образом по работам других авторов."},
-                {"en": "Plato was his student and made him a central figure in many dialogues.", "ru": "Платон был его учеником и сделал его центральной фигурой многих диалогов."},
-                {"en": "Socrates said that knowing one's ignorance was the beginning of wisdom.", "ru": "Сократ считал, что осознание своего невежества — начало мудрости."},
+                {"en": "Socrates lived in Athens almost twenty-five centuries ago and wrote no books.", "ru": "Сократ жил в Афинах почти двадцать пять веков назад и не написал книг."},
+                {"en": "We know his thought mainly from the dialogues of Plato, his student, who made him a thinker that asks rather than proclaims.", "ru": "Его мысль известна по диалогам Платона, его ученика, который сделал его мыслителем, спрашивающим, а не провозглашающим."},
+                {"en": "He began by admitting that he did not know, and called this awareness the beginning of wisdom.", "ru": "Он начинал с признания, что не знает, и называл это осознание началом мудрости."},
             ],
         },
         {
             "title_en": "Questions instead of a lecture",
             "title_ru": "Вопросы вместо лекции",
             "sentences": [
-                {"en": "Socrates asked people what they meant by words such as justice or courage.", "ru": "Сократ спрашивал людей, что они понимают под такими словами, как справедливость или мужество."},
-                {"en": "A first answer often sounded clear but failed after a few more questions.", "ru": "Первый ответ часто звучал ясно, но оказывался недостаточным после нескольких дополнительных вопросов."},
-                {"en": "The aim was not to win an argument at any price.", "ru": "Цель состояла не в том, чтобы любой ценой победить в споре."},
-                {"en": "The aim was to test whether a belief could survive careful examination.", "ru": "Цель состояла в том, чтобы проверить, выдерживает ли убеждение внимательное исследование."},
+                {"en": "He moved by questions: he asked what people meant by words like justice or courage.", "ru": "Он двигался вопросами: спрашивал, что человек понимает под словами вроде справедливости или мужества."},
+                {"en": "A first answer usually sounded convincing, but one more question exposed its weak point.", "ru": "Первый ответ обычно звучал убедительно, но следующий вопрос обнаруживал его слабое место."},
+                {"en": "The purpose was not to defeat the speaker but to test whether a belief survives careful examination.", "ru": "Цель состояла не в том, чтобы победить собеседника, а в том, чтобы проверить, выдерживает ли убеждение проверку."},
             ],
         },
         {
             "title_en": "The examined life",
             "title_ru": "Исследованная жизнь",
             "sentences": [
-                {"en": "For Socrates, philosophy concerned the way a person should live.", "ru": "Для Сократа философия касалась того, как человеку следует жить."},
-                {"en": "He connected knowledge with care for one's character and choices.", "ru": "Он связывал знание с заботой о своём характере и выборе."},
-                {"en": "An examined life does not require having an answer to everything.", "ru": "Исследованная жизнь не требует иметь ответ на всё."},
-                {"en": "It requires honesty about our reasons and readiness to correct them.", "ru": "Она требует честности в отношении наших оснований и готовности их исправлять."},
+                {"en": "For Socrates, philosophy was not a school subject but a way of life, tied to care for one's character.", "ru": "Для Сократа философия была не школьным предметом, а образом жизни, связанным с заботой о своём характере."},
+                {"en": "Examination does not require an answer to every question; it requires honesty about our reasons.", "ru": "Исследование не требует ответа на каждый вопрос; оно требует честности в отношении наших оснований."},
             ],
         },
     ],
@@ -49,7 +45,7 @@ PAYLOAD = {
         {"en": "examination", "ru": "критическое исследование, проверка"},
         {"en": "virtue", "ru": "добродетель"},
     ],
-    "simplification_note_ru": "Редакционное введение, а не перевод одного диалога. Исторический Сократ и персонаж Платона не полностью совпадают.",
+    "simplification_note_ru": "Редакционное введение, а не перевод одного диалога. Исторический Сократ и персонаж Платона различаются.",
 }
 
 
