@@ -1,67 +1,69 @@
 {% extends 'base.html' %}
+{% block title %}{{ project.title }} · Мастерская · Philosophy Reader{% endblock %}
 {% block content %}
 <section class="workshop-page">
   <div class="wrap">
     <p class="kicker kicker--night">Мастерская</p>
     <h1>{{ project.title }}</h1>
-    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <p class="workshop-back"><a href="{% url 'account:dashboard' %}">Вернуться в кабинет</a></p>
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
     {% if revision %}
-    <article>
+    <article class="workshop-reading">
       {% if revision.payload.note %}<p class="warning">{{ revision.payload.note }}</p>{% endif %}
       <h2>{{ revision.payload.title_ru }}</h2>
       {% for part in parts %}
-      <section style="margin-top: var(--s-6);">
-        <h3>{{ part.title_en }}</h3>
-        <form method="post" action="{% url 'workshop:edit_fragment' project.pk %}" class="inline edit-part-form">{%
-          csrf_token %}
-          <input type="hidden" name="kind" value="edit_part">
-          <input type="hidden" name="target" value="{{ forloop.counter0 }}">
-          <input type="hidden" name="idempotency_key" value="">
-          <label for="edit-part-{{ forloop.counter0 }}">Правка части:</label>
-          <input type="text" id="edit-part-{{ forloop.counter0 }}" name="instruction" maxlength="1000" required
-            placeholder="Как изменить эту часть?">
-          <button type="submit" class="btn btn--small">Изменить часть</button>
-        </form>
-        {% for s in part.sentences %}
-        <div>
-          <span class="s" role="button" tabindex="0" aria-expanded="false"
-            aria-controls="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">
-            <p lang="en" style="margin: 0; display: inline;">{{ s.en }}</p>
-          </span>
-          <span class="gloss" role="note" lang="ru" id="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{
-            s.ru }}</span>
-          <form method="post" action="{% url 'workshop:edit_fragment' project.pk %}" class="inline edit-sentence">{%
-            csrf_token %}
-            <input type="hidden" name="kind" value="edit_sentence">
-            <input type="hidden" name="target" value="{{ forloop.parentloop.counter0 }}:{{ forloop.counter0 }}">
+      <section class="section-gap-small">
+        <h3 lang="en">{{ part.title_en }}</h3>
+        <details class="workshop-edit">
+          <summary>Изменить часть</summary>
+          <form method="post" action="{% url 'workshop:edit_fragment' project.pk %}" class="inline edit-part-form">
+            {% csrf_token %}
+            <input type="hidden" name="kind" value="edit_part">
+            <input type="hidden" name="target" value="{{ forloop.counter0 }}">
             <input type="hidden" name="idempotency_key" value="">
-            <label for="edit-s-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">Правка предложения:</label>
-            <input type="text" id="edit-s-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}" name="instruction"
-              maxlength="1000" required placeholder="Что исправить?">
-            <button type="submit" class="btn btn--small">Изменить</button>
+            <label for="edit-part-{{ forloop.counter0 }}">Правка части:</label>
+            <input type="text" id="edit-part-{{ forloop.counter0 }}" name="instruction" maxlength="1000" required placeholder="Как изменить эту часть?">
+            <button type="submit" class="btn btn--small">Изменить часть</button>
           </form>
+        </details>
+        {% for s in part.sentences %}
+        <div class="workshop-sentence">
+          <span class="s" lang="en"
+            data-gloss="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.en }}</span>
+          <span class="gloss" role="note" lang="ru" id="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.ru }}</span>
+          <details class="workshop-edit">
+            <summary>Изменить предложение</summary>
+            <form method="post" action="{% url 'workshop:edit_fragment' project.pk %}" class="inline edit-sentence">
+              {% csrf_token %}
+              <input type="hidden" name="kind" value="edit_sentence">
+              <input type="hidden" name="target" value="{{ forloop.parentloop.counter0 }}:{{ forloop.counter0 }}">
+              <input type="hidden" name="idempotency_key" value="">
+              <label for="edit-s-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">Правка предложения:</label>
+              <input type="text" id="edit-s-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}" name="instruction" maxlength="1000" required placeholder="Что исправить?">
+              <button type="submit" class="btn btn--small">Изменить</button>
+            </form>
+          </details>
         </div>
         {% endfor %}
       </section>
       {% endfor %}
     </article>
     {% else %}
-    <p aria-live="polite" style="color: var(--night-muted);">Текст ещё не создан. Проверьте статус задачи в кабинете.
-    </p>
+    <p class="workshop-empty" aria-live="polite">Текст ещё не создан. Проверьте статус задачи в кабинете.</p>
     {% endif %}
   </div>
 </section>
 
-<section>
-  <div class="wrap">
-    <section style="margin-top: var(--s-7);">
-      <h2 class="section-title">Версии</h2>
+<div class="wrap">
+  <section class="section-gap">
+    <h2 class="section-title">Версии</h2>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Версии текста и действия с ними">
       <table>
         <thead>
           <tr>
-            <th>Создана</th>
-            <th>Hash</th>
-            <th>Действия</th>
+            <th scope="col">Создана</th>
+            <th scope="col">Hash</th>
+            <th scope="col">Действия</th>
           </tr>
         </thead>
         <tbody>
@@ -72,7 +74,8 @@
             <td>
               <a href="{% url 'workshop:revision_diff' project.pk r.pk %}">Сравнить</a>
               {% if project.head_revision_id != r.pk %}
-              <form method="post" action="{% url 'workshop:apply_head' project.pk %}" class="inline">{% csrf_token %}
+              <form method="post" action="{% url 'workshop:apply_head' project.pk %}" class="inline">
+                {% csrf_token %}
                 <input type="hidden" name="revision_id" value="{{ r.pk }}">
                 <button type="submit" class="btn btn--small btn--ghost">Применить</button>
               </form>
@@ -86,23 +89,24 @@
           {% endfor %}
         </tbody>
       </table>
-    </section>
-    <section class="discourse">
-      <h2 class="section-title">Обсуждение</h2>
-      {% for m in messages_list %}
-      <article class="message {{ m.role }}"><strong>{{ m.role }}</strong>
-        <p>{{ m.body }}</p>
-      </article>
-      {% empty %}
-      <p class="meta">Вопросов по этому тексту ещё не было.</p>
-      {% endfor %}
-      <form method="post" action="{% url 'workshop:ask' project.pk %}">{% csrf_token %}
-        <label for="instruction">Вопрос по тексту</label>
-        <textarea id="instruction" name="instruction" maxlength="2000" required>{{ instruction }}</textarea>
-        <input type="hidden" name="idempotency_key" value="">
-        <button type="submit">Спросить</button>
-      </form>
-    </section>
-  </div>
-</section>
+    </div>
+  </section>
+  <section class="discourse">
+    <h2 class="section-title">Обсуждение</h2>
+    {% for m in messages_list %}
+    <article class="message {{ m.role }}"><strong>{{ m.role }}</strong>
+      <p>{{ m.body }}</p>
+    </article>
+    {% empty %}
+    <p class="meta">Вопросов по этому тексту ещё не было.</p>
+    {% endfor %}
+    <form method="post" action="{% url 'workshop:ask' project.pk %}">
+      {% csrf_token %}
+      <label for="instruction">Вопрос по тексту</label>
+      <textarea id="instruction" name="instruction" maxlength="2000" required>{{ instruction }}</textarea>
+      <input type="hidden" name="idempotency_key" value="">
+      <button type="submit">Спросить</button>
+    </form>
+  </section>
+</div>
 {% endblock %}

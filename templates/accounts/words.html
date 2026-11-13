@@ -1,25 +1,30 @@
 {% extends 'base.html' %}
+{% block title %}Сохранённые слова · Philosophy Reader{% endblock %}
 {% block content %}
 <div class="page-head">
     <p class="kicker">Кабинет</p>
     <h1>Сохранённые слова</h1>
 </div>
 <div class="wrap">
+    {% include 'includes/account_nav.html' with active='words' %}
     <section class="account-section">
         <h2 class="section-title">Новое слово</h2>
         <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Сохранить слово</button></form>
     </section>
-    <section style="margin-top: var(--s-6);">
+    <section class="section-gap-small">
         <h2 class="section-title">Словарь</h2>
         <div class="cards">
             {% for word in words %}
             <article class="card">
-                <h2>{{ word.term }}</h2>
+                <h3 lang="en">{{ word.term }}</h3>
                 <p>{{ word.translation_ru }}</p>
                 {% if word.context_en %}<blockquote lang="en">{{ word.context_en }}</blockquote>{% endif %}
             </article>
             {% empty %}
-            <p>Слов пока нет.</p>
+            <div class="empty-state">
+                <p>Слов пока нет. Сохраните первый термин с переводом в форме выше.</p>
+                <p><a href="{% url 'library:library' %}">Выбрать текст для чтения</a></p>
+            </div>
             {% endfor %}
         </div>
     </section>

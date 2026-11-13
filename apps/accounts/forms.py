@@ -15,6 +15,9 @@ class RegisterForm(forms.Form):
     def __init__(self, *args, invite_required=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.invite_required = invite_required
+        self.fields["login"].widget.attrs.update({"autocomplete": "username", "autocapitalize": "none"})
+        self.fields["password"].widget.attrs["autocomplete"] = "new-password"
+        self.fields["password_confirm"].widget.attrs["autocomplete"] = "new-password"
 
     def clean_invite_code(self):
         code = (self.cleaned_data.get("invite_code") or "").strip()

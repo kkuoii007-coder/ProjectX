@@ -46,7 +46,7 @@
       }
     });
 
-    // The specimen on the home page is a single sentence; it carries no tab stop of its own.
+    // No-JS HTML is readable prose. Add button semantics only with working handlers.
     sentences.forEach(function (sentence) {
       if (!sentence.hasAttribute('tabindex')) {
         sentence.setAttribute('tabindex', '0');
@@ -64,6 +64,10 @@
     var all = doc.querySelectorAll('.reader .s[data-gloss]');
     var openCount = doc.querySelectorAll('.reader .s.is-open').length;
     var everythingOpen = all.length > 0 && openCount === all.length;
+    var reader = doc.querySelector('[data-reader]');
+    // Several long notes must never collide or drift down the margin.
+    // Use inline translations for every multi-open state, including manual toggles.
+    if (reader) { reader.classList.toggle('is-all', openCount > 1); }
     toggleAll.setAttribute('aria-pressed', String(everythingOpen));
     toggleAll.textContent = everythingOpen ? 'Скрыть переводы' : 'Показать переводы';
   }
@@ -89,6 +93,12 @@
     button.addEventListener('click', function () {
       var open = nav.classList.toggle('is-open');
       button.setAttribute('aria-expanded', String(open));
+    });
+    nav.addEventListener('click', function (event) {
+      if (event.target.closest('a')) {
+        nav.classList.remove('is-open');
+        button.setAttribute('aria-expanded', 'false');
+      }
     });
     doc.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && nav.classList.contains('is-open')) {
@@ -139,6 +149,9 @@
     initMenu();
     initReadingLine();
     initRail();
+    // Enhance only after this file actually loads. A failed/blocked script
+    // leaves the menu and all translations visible instead of inaccessible.
+    doc.documentElement.classList.add('js');
   }
 
   if (doc.readyState === 'loading') { doc.addEventListener('DOMContentLoaded', init); } else { init(); }

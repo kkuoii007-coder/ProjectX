@@ -494,3 +494,24 @@ review=fail завершается без списания» заменён ре
 - 102 теста OK; `manage.py check` (prod) — 0 проблем.
 - Рестарт web; smoke: /collections/first-steps/ показывает заголовок
   «Сократ: зачем спрашивать и проверять», сырых тегов нет.
+
+## Redesign v1 verification · 2026-11-13
+
+- Base: `main@247b81ba1932aa51caf002cb762c0b0b0d14cb0b`; isolated branch
+  `design/redesign-v1`. Production and `redesign/frontend` remain untouched.
+- Stage 1: repo permissions, CLI, base SHA, rulesets/hooks/workflows and routes
+  checked; baseline public pages captured at 390/768/1440; detached base suite
+  102/102 passed. Production browser access failed (tunnel/reset).
+- Stage 2: actual Django home/reader redesign shown to owner via screenshots;
+  same learning payloads, self-hosted fonts and stack. No backend/schema rewrite.
+- Stage 3: catalogue/account/auth/workshop consistency, real template CSRF/gloss
+  repairs, account redirect compatibility and safe favorite return paths.
+- Stage 4: 132/132 Django tests, check, no migration drift, hashed collectstatic,
+  45 page/viewport captures, 16 zero-violation axe scans, keyboard/forms/fake-only
+  worker flows, no-JS/script-failure and long-content/reflow verification.
+- Known limits: PG18 sandbox vs PG16 VPS, no production/browser cross-engine
+  certification, no hosted full-app preview, prior backend purge/error-context
+  issues documented separately rather than silently changing data semantics.
+- Full handoff, safety, rollback and evidence: `docs/REDESIGN_V1.md`, `FLOWS.md`.
+- Next stage: owner reviews PR and tests the pinned head in `/opt/pr-design`
+  through SSH tunnel. No merge, production update or deployment action authorized.

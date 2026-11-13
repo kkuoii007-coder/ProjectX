@@ -1,0 +1,17 @@
+{% load ui %}
+<article class="publication-card">
+    <p class="publication-card__meta">
+        {% if p.thinker %}<a href="{% url 'library:thinker' p.thinker.slug %}">{{ p.thinker.name_ru }}</a> · {% endif %}
+        {{ p.revision.payload.parts|length|ru_plural:"часть,части,частей" }}
+    </p>
+    <h2 class="publication-card__title"><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru }}</a></h2>
+    {% if p.revision.payload.lead_ru %}<p class="publication-card__lead">{{ p.revision.payload.lead_ru }}</p>{% endif %}
+    {% if removable %}
+    <form method="post" action="{% url 'account:favorite_toggle' p.pk %}" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn--ghost btn--small">Удалить из избранного</button>
+    </form>
+    {% else %}
+    <a class="publication-card__link" href="{% url 'library:read' p.slug %}" aria-label="Читать: {{ p.revision.payload.title_ru }}">Читать текст <span aria-hidden="true">→</span></a>
+    {% endif %}
+</article>

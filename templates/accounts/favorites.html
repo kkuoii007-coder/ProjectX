@@ -1,23 +1,19 @@
 {% extends 'base.html' %}
+{% block title %}Избранное · Philosophy Reader{% endblock %}
 {% block content %}
 <div class="page-head">
     <p class="kicker">Кабинет</p>
     <h1>Избранное</h1>
 </div>
 <div class="wrap">
-    <div class="cards">
+    {% include 'includes/account_nav.html' with active='favorites' %}
+    <div class="catalog-list">
         {% for f in favorites %}
-        <article class="card">
-            <h2><a href="{% url 'library:read' f.publication.slug %}">{{ f.publication.revision.payload.title_ru }}</a>
-            </h2>
-            <form method="post" action="{% url 'account:favorite_toggle' f.publication.pk %}" class="inline">{% csrf_token %}
-                <button type="submit" class="btn btn--ghost btn--small">Удалить из избранного</button>
-            </form>
-        </article>
+        {% include 'includes/publication_card.html' with p=f.publication removable=True %}
         {% empty %}
         <div class="empty-state">
             <p>Избранных материалов пока нет.</p>
-            <p><a class="btn" href="{% url 'library:home' %}">В библиотеку</a></p>
+            <p><a class="btn" href="{% url 'library:library' %}">В библиотеку</a></p>
         </div>
         {% endfor %}
     </div>

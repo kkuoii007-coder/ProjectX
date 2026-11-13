@@ -1,0 +1,12 @@
+Creating test database for alias 'default'...
+....................................................................................................................................
+----------------------------------------------------------------------
+Ran 132 tests in 2.356s
+
+OK
+Destroying test database for alias 'default'...
+Found 132 test(s).
+System check identified no issues (0 silenced).
+Seeded publication: socrates-questions
+Seeded publication: socrates-questions
+Seeded publication: socrates-questions

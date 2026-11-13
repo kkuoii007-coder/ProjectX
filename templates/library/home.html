@@ -5,21 +5,22 @@
 <section class="hero" aria-labelledby="hero-title">
   <div class="wrap hero__grid">
     <div class="hero__copy">
-      <p class="kicker">Философия на простом английском</p>
-      <h1 class="hero__title" id="hero-title">Сложные идеи. <em>Простой английский.</em></h1>
+      <p class="kicker">Журнал для вдумчивого чтения <span class="language-pair" lang="en">EN / RU</span></p>
+      <h1 class="hero__title" id="hero-title">Сложные идеи.<br><em>Простой английский.</em></h1>
       <p class="hero__lead">Читайте философию небольшими частями. Нажмите на любое английское предложение — перевод появится рядом, как заметка на полях.</p>
       <div class="hero__actions">
         {% if featured %}<a class="btn" href="{% url 'library:read' featured.publication.slug %}">Начать читать</a>{% endif %}
-        <a class="btn btn--ghost" href="#workshop">Создать свой текст</a>
+        <a class="text-link" href="{% url 'library:library' %}">Вся библиотека <span aria-hidden="true">↗</span></a>
       </div>
+      <p class="hero__note">Читайте без регистрации. Открывайте перевод по нажатию.</p>
     </div>
     {% if featured.specimen %}
     <figure class="specimen" data-glossary>
-      <span class="specimen__pilcrow" aria-hidden="true">¶</span>
-      <figcaption class="specimen__label">Попробуйте: нажмите на предложение</figcaption>
+      <figcaption class="specimen__label"><span>На полях</span><span lang="en">EN → RU</span></figcaption>
+      <p class="specimen__instruction">Попробуйте: нажмите на предложение</p>
       <p class="specimen__text">
         <span class="s" lang="en" data-gloss="{{ featured.specimen.id }}">{{ featured.specimen.en }}</span>
-        <span class="gloss" id="{{ featured.specimen.id }}" lang="ru">{{ featured.specimen.ru }}</span>
+        <span class="gloss" id="{{ featured.specimen.id }}" lang="ru" role="note">{{ featured.specimen.ru }}</span>
       </p>
       <p class="specimen__source">
         {% if featured.publication.thinker %}<span>{{ featured.publication.thinker.name_ru }}</span> · {% endif %}<span lang="en">{{ featured.specimen.part_title }}</span>
@@ -40,7 +41,10 @@
       <p class="meta">
         {% if featured.publication.thinker %}<a href="{% url 'library:thinker' featured.publication.thinker.slug %}">{{ featured.publication.thinker.name_ru }}</a><span aria-hidden="true"> · </span>{% endif %}{{ featured.outline.part_count|ru_plural:"часть,части,частей" }}<span aria-hidden="true"> · </span>{{ featured.outline.sentence_count|ru_plural:"предложение,предложения,предложений" }}
       </p>
+      <a class="text-link featured__read" href="{% url 'library:read' featured.publication.slug %}">Открыть текст <span aria-hidden="true">→</span></a>
     </div>
+    <div class="featured__contents">
+    <p class="kicker">В этом тексте</p>
     <ol class="toc" aria-label="Содержание материала">
       {% for part in featured.outline.parts %}
       <li class="toc__item">
@@ -55,6 +59,7 @@
       </li>
       {% endfor %}
     </ol>
+    </div>
   </div>
 </section>
 {% else %}
@@ -124,7 +129,7 @@
   <div class="wrap workshop__grid">
     <div class="workshop__copy">
       <p class="kicker kicker--night">Мастерская</p>
-      <h2 class="workshop__title" id="workshop-title">Нет нужного текста? Опишите идею — мы напишем его.</h2>
+      <h2 class="workshop__title" id="workshop-title">От вашего вопроса<br>к новому тексту.</h2>
       <p class="workshop__lead">Назовите тему или вопрос. Мастерская подготовит серию коротких частей на простом английском с переводом каждого предложения. Любое предложение или часть потом можно поправить.</p>
       <ul class="facts">
         <li><strong>{{ costs.generate }}</strong> кредитов — создание серии</li>

@@ -1,17 +1,12 @@
 {% extends 'base.html' %}
+{% block title %}Кабинет · Philosophy Reader{% endblock %}
 {% block content %}
 <div class="page-head">
     <p class="kicker">Кабинет</p>
     <h1>Ваши тексты и задачи</h1>
 </div>
 <div class="wrap">
-    <nav class="account-nav" aria-label="Разделы кабинета">
-        <a href="{% url 'account:credits' %}">Кредиты</a>
-        <a href="{% url 'account:favorites' %}">Избранное</a>
-        <a href="{% url 'account:words' %}">Слова</a>
-        <a href="{% url 'account:security' %}">Безопасность</a>
-        <a href="{% url 'account:export' %}">Экспорт данных</a>
-    </nav>
+    {% include 'includes/account_nav.html' with active='dashboard' %}
     <section>
         <h2 class="section-title">Проекты</h2>
         <div class="cards">
@@ -28,16 +23,17 @@
             {% endfor %}
         </div>
     </section>
-    <section style="margin-top: var(--s-7);">
+    <section class="section-gap">
         <h2 class="section-title">История задач</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="История задач">
         <table>
             <thead>
                 <tr>
-                    <th>Создана</th>
-                    <th>Тип</th>
-                    <th>Статус</th>
-                    <th>Этап</th>
-                    <th>Результат</th>
+                    <th scope="col">Создана</th>
+                    <th scope="col">Тип</th>
+                    <th scope="col">Статус</th>
+                    <th scope="col">Этап</th>
+                    <th scope="col">Результат</th>
                 </tr>
             </thead>
             <tbody>
@@ -56,6 +52,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
     </section>
 </div>
 {% endblock %}

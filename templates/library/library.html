@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% block title %}Библиотека · Philosophy Reader{% endblock %}
 {% block content %}
 <div class="page-head">
   <p class="kicker">Каталог</p>
@@ -9,19 +10,27 @@
   <form method="get" class="search-form" role="search">
     <div>
       <label for="q">Поиск по названию и мыслителю</label>
-      <input id="q" name="q" value="{{ query }}">
+      <input id="q" name="q" type="search" value="{{ query }}" maxlength="200">
     </div>
     <button type="submit">Найти</button>
+    {% if query %}<a class="search-reset" href="{% url 'library:library' %}">Сбросить поиск</a>{% endif %}
   </form>
   {% if query %}<p class="count-note">Результаты по запросу «{{ query }}».</p>{% endif %}
-  <div class="cards">
+  <div class="catalog-list">
     {% for p in publications %}
-    <article class="publication-card">
-      <h2 class="publication-card__title"><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru }}</a></h2>
-      <p class="publication-card__lead">{{ p.revision.payload.lead_ru|default:'' }}</p>
-    </article>
+    {% include 'includes/publication_card.html' with p=p %}
     {% empty %}
-    <p>Ничего не найдено.</p>
+    <div class="empty-state">
+      {% if query %}
+      <h2>Ничего не найдено</h2>
+      <p>Попробуйте другое название или имя мыслителя.</p>
+      <p><a href="{% url 'library:library' %}">Показать все тексты</a></p>
+      {% else %}
+      <h2>Первые материалы готовятся</h2>
+      <p>Здесь появятся тексты на простом английском с готовым переводом.</p>
+      <p><a href="{% url 'library:home' %}">На главную</a></p>
+      {% endif %}
+    </div>
     {% endfor %}
   </div>
 </div>

@@ -1,0 +1,946 @@
+{
+  "environment": {
+    "base": "http://127.0.0.1:8812",
+    "browser": "Chromium",
+    "backend": "Django/PostgreSQL isolated sandbox",
+    "ai": "fake only"
+  },
+  "checks": [
+    {
+      "name": "Skip link first",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Skip link targets main",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Mobile menu open",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Menu Escape focuses button",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Menu library navigation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Catalog genuine search",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Catalog empty result",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Catalog reset",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Reader via catalog",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Reader Enter opens",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Reader Escape closes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Reader Space opens",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Show all",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Mixed state toggles aria",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Multiple inline class",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Hide all",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Chapter link",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Desktop single margin",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Desktop multi-open inline",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Resize nav hidden",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Resize nav returns",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "No JS readable 8 glosses",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "No JS no dead buttons",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "No JS translations inline",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "No JS mobile nav visible",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Failed JS preserves content",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Login error visible",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Login dashboard",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Favorite added",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Favorite removed redirect",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Word saved with redirect",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Report success",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Workshop queued",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Fake generation delivered real revision",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Workshop translation works",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Sentence edit CSRF accepted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Edited revision has apply action",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Revision comparison existing JSON",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Apply revision current marker",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Part edit CSRF accepted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Ask CSRF accepted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Invite validation visible",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Fake answer visible",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Invite registration success",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Password error redirects safely",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Password changed current session preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Account export download",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Logout all returns public",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Logout all protects account",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Delete wrong password stays safe",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Disposable empty account deletion",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "home 320 reflow",
+      "pass": true,
+      "detail": "320"
+    },
+    {
+      "name": "reader 320 reflow",
+      "pass": true,
+      "detail": "320"
+    },
+    {
+      "name": "catalog 320 reflow",
+      "pass": true,
+      "detail": "320"
+    },
+    {
+      "name": "favorites 320 reflow",
+      "pass": true,
+      "detail": "320"
+    },
+    {
+      "name": "workshop 320 reflow",
+      "pass": true,
+      "detail": "320"
+    },
+    {
+      "name": "security 320 reflow",
+      "pass": true,
+      "detail": "320"
+    },
+    {
+      "name": "Selected text does not toggle gloss",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Reduced motion respected",
+      "pass": true,
+      "detail": ""
+    }
+  ],
+  "matrix": [
+    {
+      "name": "home",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Philosophy Reader — философия на простом английском"
+    },
+    {
+      "name": "reader",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Сократ: зачем спрашивать и проверять — Philosophy Reader"
+    },
+    {
+      "name": "catalog",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Библиотека · Philosophy Reader"
+    },
+    {
+      "name": "thinker",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Сократ · Philosophy Reader"
+    },
+    {
+      "name": "collection",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Первые шаги в философии · Philosophy Reader"
+    },
+    {
+      "name": "credits-help",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Как работают кредиты · Philosophy Reader"
+    },
+    {
+      "name": "login",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Вход · Philosophy Reader"
+    },
+    {
+      "name": "register",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Регистрация · Philosophy Reader"
+    },
+    {
+      "name": "dashboard",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Кабинет · Philosophy Reader"
+    },
+    {
+      "name": "credits",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Кредиты · Philosophy Reader"
+    },
+    {
+      "name": "favorites",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Избранное · Philosophy Reader"
+    },
+    {
+      "name": "words",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Сохранённые слова · Philosophy Reader"
+    },
+    {
+      "name": "security",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Безопасность · Philosophy Reader"
+    },
+    {
+      "name": "create",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Новый проект · Philosophy Reader"
+    },
+    {
+      "name": "workshop",
+      "width": 390,
+      "status": 200,
+      "overflow": false,
+      "title": "Sandbox philosophy QA · Мастерская · Philosophy Reader"
+    },
+    {
+      "name": "home",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Philosophy Reader — философия на простом английском"
+    },
+    {
+      "name": "reader",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Сократ: зачем спрашивать и проверять — Philosophy Reader"
+    },
+    {
+      "name": "catalog",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Библиотека · Philosophy Reader"
+    },
+    {
+      "name": "thinker",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Сократ · Philosophy Reader"
+    },
+    {
+      "name": "collection",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Первые шаги в философии · Philosophy Reader"
+    },
+    {
+      "name": "credits-help",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Как работают кредиты · Philosophy Reader"
+    },
+    {
+      "name": "login",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Вход · Philosophy Reader"
+    },
+    {
+      "name": "register",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Регистрация · Philosophy Reader"
+    },
+    {
+      "name": "dashboard",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Кабинет · Philosophy Reader"
+    },
+    {
+      "name": "credits",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Кредиты · Philosophy Reader"
+    },
+    {
+      "name": "favorites",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Избранное · Philosophy Reader"
+    },
+    {
+      "name": "words",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Сохранённые слова · Philosophy Reader"
+    },
+    {
+      "name": "security",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Безопасность · Philosophy Reader"
+    },
+    {
+      "name": "create",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Новый проект · Philosophy Reader"
+    },
+    {
+      "name": "workshop",
+      "width": 768,
+      "status": 200,
+      "overflow": false,
+      "title": "Sandbox philosophy QA · Мастерская · Philosophy Reader"
+    },
+    {
+      "name": "home",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Philosophy Reader — философия на простом английском"
+    },
+    {
+      "name": "reader",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Сократ: зачем спрашивать и проверять — Philosophy Reader"
+    },
+    {
+      "name": "catalog",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Библиотека · Philosophy Reader"
+    },
+    {
+      "name": "thinker",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Сократ · Philosophy Reader"
+    },
+    {
+      "name": "collection",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Первые шаги в философии · Philosophy Reader"
+    },
+    {
+      "name": "credits-help",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Как работают кредиты · Philosophy Reader"
+    },
+    {
+      "name": "login",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Вход · Philosophy Reader"
+    },
+    {
+      "name": "register",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Регистрация · Philosophy Reader"
+    },
+    {
+      "name": "dashboard",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Кабинет · Philosophy Reader"
+    },
+    {
+      "name": "credits",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Кредиты · Philosophy Reader"
+    },
+    {
+      "name": "favorites",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Избранное · Philosophy Reader"
+    },
+    {
+      "name": "words",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Сохранённые слова · Philosophy Reader"
+    },
+    {
+      "name": "security",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Безопасность · Philosophy Reader"
+    },
+    {
+      "name": "create",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Новый проект · Philosophy Reader"
+    },
+    {
+      "name": "workshop",
+      "width": 1440,
+      "status": 200,
+      "overflow": false,
+      "title": "Sandbox philosophy QA · Мастерская · Philosophy Reader"
+    }
+  ],
+  "robustness": [
+    {
+      "name": "home",
+      "width": 320,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "reader",
+      "width": 320,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "catalog",
+      "width": 320,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "favorites",
+      "width": 320,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "workshop",
+      "width": 320,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "security",
+      "width": 320,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "home",
+      "width": 390,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "reader",
+      "width": 390,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "catalog",
+      "width": 390,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "favorites",
+      "width": 390,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "workshop",
+      "width": 390,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "security",
+      "width": 390,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "home",
+      "width": 768,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "reader",
+      "width": 768,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "catalog",
+      "width": 768,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "favorites",
+      "width": 768,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "workshop",
+      "width": 768,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "security",
+      "width": 768,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "home",
+      "width": 1440,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "reader",
+      "width": 1440,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "catalog",
+      "width": 1440,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "favorites",
+      "width": 1440,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "workshop",
+      "width": 1440,
+      "syntheticDOM": true,
+      "overflow": false
+    },
+    {
+      "name": "security",
+      "width": 1440,
+      "syntheticDOM": true,
+      "overflow": false
+    }
+  ],
+  "textScale": [
+    {
+      "name": "home",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "reader",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "catalog",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "thinker",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "collection",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "credits-help",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "login",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "register",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "dashboard",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "credits",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "favorites",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "words",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "security",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "create",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "workshop",
+      "textScale": "200%",
+      "width": 768,
+      "overflow": false
+    }
+  ],
+  "axe": [
+    {
+      "name": "home",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "reader",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "catalog",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "thinker",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "collection",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "credits-help",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "login",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "register",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "dashboard",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "credits",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "favorites",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "words",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "security",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "create",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "workshop",
+      "width": 390,
+      "violations": []
+    },
+    {
+      "name": "workshop-open-translation-edit",
+      "width": 390,
+      "violations": []
+    }
+  ],
+  "consoleErrors": [],
+  "uncaughtErrors": [],
+  "failedRequests": [],
+  "externalRequests": []
+}

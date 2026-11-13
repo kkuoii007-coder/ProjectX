@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% block title %}{{ collection.title_ru }} · Philosophy Reader{% endblock %}
 {% block content %}
 <div class="page-head">
     <p class="kicker">Подборка</p>
@@ -6,13 +7,15 @@
     <p class="meta">{{ collection.description_ru }}</p>
 </div>
 <div class="wrap">
-    <div class="cards">
+    <p class="meta"><a href="{% url 'library:library' %}">Все тексты библиотеки</a></p>
+    <div class="catalog-list">
         {% for p in publications %}
-        <article class="publication-card">
-            <h2 class="publication-card__title"><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru }}</a></h2>
-        </article>
+        {% include 'includes/publication_card.html' with p=p %}
         {% empty %}
-        <p>Подборка пуста.</p>
+        <div class="empty-state">
+            <p>Подборка пуста. Пока можно выбрать текст из общего каталога.</p>
+            <p><a href="{% url 'library:library' %}">В библиотеку</a></p>
+        </div>
         {% endfor %}
     </div>
 </div>

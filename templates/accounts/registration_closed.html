@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% block title %}Регистрация закрыта · Philosophy Reader{% endblock %}
 {% block content %}
 <div class="page-head">
     <p class="kicker">Регистрация</p>
@@ -6,6 +7,7 @@
     <p class="meta">Библиотека и готовые переводы доступны без аккаунта.</p>
 </div>
 <div class="wrap">
-    <p><a class="btn" href="{% url 'library:home' %}">В библиотеку</a></p>
+    {% include 'includes/account_nav.html' with active='register' %}
+    <p><a class="btn" href="{% url 'library:library' %}">В библиотеку</a></p>
 </div>
 {% endblock %}

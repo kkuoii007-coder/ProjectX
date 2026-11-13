@@ -13,6 +13,7 @@ from apps.credits.models import Wallet, grant_welcome_credits
 from apps.library.models import Favorite, Publication
 from apps.library.presenters import SENTENCES_PER_PARAGRAPH, outline, pick_specimen, reader_parts, reader_terms
 from apps.library.templatetags.ui import ru_plural
+from tests.test_redesign_contracts import Markup
 
 
 class PresenterTests(TestCase):
@@ -106,13 +107,26 @@ class HomeAndReaderTests(TestCase):
         response = self.client.get(reverse("library:read", args=[self.publication.slug]))
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
-        sentences = sum(len(p["sentences"]) for p in self.publication.revision.payload["parts"])
-        self.assertEqual(body.count('class="s" role="button" tabindex="0" aria-expanded="false"'), sentences)
-        self.assertEqual(body.count('role="note"'), sentences)
-        # Every aria-controls target exists exactly once.
+        markup = Markup(response)
+        expected_count = sum(len(p["sentences"]) for p in self.publication.revision.payload["parts"])
+        sentences = markup.find("span", css_class="s")
+        self.assertEqual(len(sentences), expected_count)
+        self.assertEqual(len(markup.find("span", css_class="gloss")), expected_count)
+        for sentence in sentences:
+            # Without JS the visible translation is a note, not a collapsed control.
+            for attribute in ("role", "tabindex", "aria-expanded", "aria-controls"):
+                self.assertNotIn(attribute, sentence.attrs)
+            target = sentence.attrs.get("data-gloss")
+            self.assertTrue(target)
+            translations = markup.find("span", css_class="gloss", id=target)
+            self.assertEqual(len(translations), 1)
+            self.assertEqual(translations[0].attrs.get("role"), "note")
+            self.assertNotIn("hidden", translations[0].attrs)
+        # Every data-gloss target exists exactly once, ready for JS enhancement.
         for part in reader_parts(self.publication.revision.payload):
             for paragraph in part["paragraphs"]:
                 for s in paragraph:
+                    self.assertEqual(body.count(f'data-gloss="{s["id"]}"'), 1)
                     self.assertEqual(body.count(f'id="{s["id"]}"'), 1)
         self.assertContains(response, "Сократ жил в Афинах")
         self.assertContains(response, "Сократ")
@@ -255,8 +269,18 @@ class RedesignedPagesContractTests(TestCase):
         project.save()
         response = self.client.get(reverse("workshop:project", args=[project.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'class="s" role="button" tabindex="0" aria-expanded="false"')
-        self.assertContains(response, 'role="note"')
+        markup = Markup(response)
+        sentences = markup.find("span", css_class="s")
+        self.assertEqual(len(sentences), 1)
+        sentence = sentences[0]
+        for attribute in ("role", "tabindex", "aria-expanded", "aria-controls"):
+            self.assertNotIn(attribute, sentence.attrs)
+        self.assertEqual(sentence.attrs.get("data-gloss"), "ru-0-0")
+        translations = markup.find("span", css_class="gloss", id="ru-0-0")
+        self.assertEqual(len(translations), 1)
+        self.assertEqual(translations[0].attrs.get("role"), "note")
+        self.assertNotIn("hidden", translations[0].attrs)
+        self.assertEqual(translations[0].text, "Привет.")
         self.assertContains(response, reverse("workshop:edit_fragment", args=[project.pk]))
         self.assertNotContains(response, 'class="sentence"')
 

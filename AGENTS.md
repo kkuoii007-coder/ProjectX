@@ -45,8 +45,10 @@ margin (right margin at >=82rem, under the sentence on narrow screens).
 - `static/js/reader.js` — the only JS (~170 lines, no dependencies). Pages must
   stay usable without JS: translations visible, menu expanded.
 - `templates/base.html`; page templates in `templates/<app>/`. Reader markup:
-  `span.s[role=button][tabindex=0][aria-expanded][aria-controls]` +
-  `span.gloss[role=note][lang=ru]`. This markup is used on the reader and on
+  `span.s[data-gloss]` + `span.gloss[role=note][lang=ru]`. Working JS adds
+  `[role=button][tabindex=0][aria-expanded][aria-controls]` to each sentence;
+  without JS these remain ordinary prose with visible translations, not dead
+  keyboard controls. This markup is used on the reader and on
   `workshop/project.html`; the old `.sentence/.translation` markup is gone.
 - View-only context builders live in `apps/library/presenters.py`; template
   helpers in `apps/library/templatetags/ui.py`.
@@ -54,6 +56,18 @@ margin (right margin at >=82rem, under the sentence on narrow screens).
   reviews or metrics). Honour `prefers-reduced-motion`.
 - Frontend checks: layout at 375/768/1440, no horizontal overflow, 320px,
   keyboard operation, empty console, contrast. The dev preview is loopback only.
+- Redesign v1 keeps the same stack and content. Shared account navigation and
+  publication entries live in `templates/includes/`. Do not split Django tags
+  or variable expressions across newlines. All POST forms must render a real
+  CSRF input, including forms inside `details`.
+- Test 390/768/1440 plus 320px, script failure and no-JS. One open translation
+  uses the wide margin; several open translations move inline to avoid drifting
+  or overlapping notes. Keep English/Russian learning payloads unchanged.
+- Tables use `.table-scroll` with a focusable labelled region. Keep auth,
+  registration, error, empty and workshop states at the same quality as home.
+- Use isolated PostgreSQL + pgvector and `AI_PROVIDER=fake`,
+  `LIVE_AI_ENABLED=false` for local QA. Never copy production `.env`/data.
+  Python lock installation and `collectstatic` are the build; no Node required.
 
 ## Commands
 

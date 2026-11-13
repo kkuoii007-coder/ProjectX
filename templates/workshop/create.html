@@ -1,11 +1,13 @@
 {% extends 'base.html' %}
+{% block title %}Новый проект · Philosophy Reader{% endblock %}
 {% block content %}
 <section class="workshop-page">
     <div class="wrap">
         <p class="kicker kicker--night">Мастерская</p>
         <h1>Новый проект</h1>
+        <p class="workshop-back"><a href="{% url 'account:dashboard' %}">Вернуться в кабинет</a></p>
         {% if error %}
-        <p class="error">{{ error }}</p>
+        <p class="error" role="alert">{{ error }}</p>
         {% if error == 'Недостаточно кредитов для этого действия' %}<p><a href="{% url 'account:credits' %}">Добавить
                 кредиты</a> · <a href="{% url 'library:home' %}">Продолжить чтение</a></p>{% endif %}
         {% endif %}

@@ -3,10 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f5f4f0">
+  <meta name="theme-color" content="#f7f5ef">
   <title>{% block title %}Philosophy Reader — философия на простом английском{% endblock %}</title>
   <meta name="description" content="{% block description %}Философские тексты на простом английском с переводом каждого предложения по нажатию и личной ИИ-мастерской.{% endblock %}">
-  <script>document.documentElement.classList.add('js');</script>
   <link rel="preload" href="{% static 'fonts/literata-latin-opsz-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="{% static 'fonts/literata-cyrillic-opsz-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="{% static 'fonts/golos-text-cyrillic-wght-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
@@ -20,8 +19,9 @@
   <div class="site-header__inner">
     <a class="brand" href="{% url 'library:home' %}" aria-label="Philosophy Reader — на главную">
       <span class="brand__mark" aria-hidden="true">¶</span>
-      <span class="brand__name">Philosophy <em>Reader</em></span>
+      <span class="brand__name" lang="en">Philosophy Reader</span>
     </a>
+    <p class="site-header__edition">Философия на простом английском<span>Для любопытства. Не для отметок.</span></p>
     {% if user.is_authenticated and wallet %}
     <a href="{% url 'account:credits' %}" class="balance" aria-label="Доступно кредитов: {{ wallet.available_credits }}{% if wallet.reserved_credits %}, в работе: {{ wallet.reserved_credits }}{% endif %}">
       <span class="balance__label">Доступно</span>
@@ -31,9 +31,10 @@
     {% endif %}
     <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Меню</button>
     <nav class="site-nav" id="site-nav" aria-label="Основная навигация">
-      <a href="{% url 'library:library' %}">Библиотека</a>
-      <a href="{% url 'library:home' %}#workshop">Мастерская</a>
-      <a href="{% url 'library:credits_help' %}">Как работают кредиты</a>
+      <a href="{% url 'library:library' %}"{% if request.resolver_match.url_name == 'library' or request.resolver_match.url_name == 'read' or request.resolver_match.url_name == 'thinker' or request.resolver_match.url_name == 'collection' %} aria-current="page"{% endif %}>Библиотека</a>
+      <a href="{% url 'library:home' %}#workshop"{% if request.resolver_match.namespace == 'workshop' %} aria-current="page"{% endif %}>Мастерская</a>
+      <a href="{% url 'library:credits_help' %}"{% if request.resolver_match.url_name == 'credits_help' %} aria-current="page"{% endif %}>Как работают кредиты</a>
+      <span class="site-nav__spacer" aria-hidden="true"></span>
       {% if user.is_authenticated %}
         <a href="{% url 'account:dashboard' %}">Кабинет</a>
         <form method="post" action="{% url 'accounts:logout' %}" class="inline">{% csrf_token %}<button class="link" type="submit">Выйти</button></form>
@@ -44,13 +45,13 @@
     </nav>
   </div>
 </header>
-<main id="main">
+<main id="main" tabindex="-1">
 {% if messages %}<div class="notices" aria-live="polite">{% for message in messages %}<p class="notice {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
 <footer class="site-footer">
   <div class="site-footer__inner">
-    <p class="site-footer__mark" aria-hidden="true">¶</p>
+    <p class="site-footer__mark" lang="en">Philosophy<br>Reader<span>Читать. Спрашивать. Думать.</span></p>
     <p class="site-footer__note">Материалы предназначены для знакомства с философией и не гарантируют отсутствия ошибок. <a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p>
     <p class="site-footer__colophon">Набрано шрифтами Literata и Golos Text (SIL Open Font License).</p>
   </div>

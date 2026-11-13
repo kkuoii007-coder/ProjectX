@@ -22,7 +22,7 @@
   <div class="reader__layout wrap">
     <aside class="reader__rail" aria-label="Навигация по тексту">
       <nav class="rail" aria-label="Части">
-        <p class="rail__label">Части</p>
+        <p class="rail__label">Содержание</p>
         <ol class="rail__list">
           {% for part in parts %}
           <li><a class="rail__link" href="#part-{{ part.number }}" data-part-link="part-{{ part.number }}"><span class="rail__num" aria-hidden="true">{{ part.number|stringformat:"02d" }}</span><span lang="en">{{ part.title_en }}</span></a></li>
@@ -32,10 +32,11 @@
       <div class="rail__tools" hidden data-tools>
         <button class="chip" type="button" data-toggle-all aria-pressed="false">Показать переводы</button>
       </div>
+      <p class="rail__note">Читайте в своём темпе.<br>Переводы уже готовы.</p>
     </aside>
 
     <div class="reader__body">
-      <p class="hint" id="reader-hint">Нажмите на английское предложение — или перейдите к нему клавишей Tab и нажмите Enter — чтобы увидеть перевод. Перевод готов заранее и не тратит кредиты.</p>
+      <p class="hint" id="reader-hint"><strong>Перевод по нажатию.</strong> Нажмите на английское предложение или выберите его клавишей Tab и нажмите Enter. Перевод готов заранее и не тратит кредиты.</p>
       {% for part in parts %}
       <section class="part" id="part-{{ part.number }}" aria-labelledby="part-{{ part.number }}-title">
         <header class="part__head">
@@ -44,7 +45,7 @@
           {% if part.title_ru %}<p class="part__title-ru">{{ part.title_ru }}</p>{% endif %}
         </header>
         {% for paragraph in part.paragraphs %}
-        <p class="para" lang="en">{% for s in paragraph %}<span class="s" role="button" tabindex="0" aria-expanded="false" aria-controls="{{ s.id }}" data-gloss="{{ s.id }}">{{ s.en }}</span><span class="gloss" id="{{ s.id }}" lang="ru" role="note">{{ s.ru }}</span> {% endfor %}</p>
+        <p class="para" lang="en">{% for s in paragraph %}<span class="s" data-gloss="{{ s.id }}">{{ s.en }}</span><span class="gloss" id="{{ s.id }}" lang="ru" role="note">{{ s.ru }}</span> {% endfor %}</p>
         {% endfor %}
       </section>
       {% empty %}

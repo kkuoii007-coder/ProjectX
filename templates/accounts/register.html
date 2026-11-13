@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
+{% block title %}Регистрация · Philosophy Reader{% endblock %}
 {% block content %}
 <section class="form-page">
+    {% include 'includes/account_nav.html' with active='register' %}
     <p class="kicker">Регистрация</p>
     <h1>Регистрация</h1>
     <div class="warning">
@@ -8,6 +10,8 @@
         <p>Мы не запрашиваем email или телефон. Если вы забудете логин или пароль, вернуть доступ к кабинету, текстам и
             кредитам не получится. Сохраните данные в менеджере паролей перед регистрацией.</p>
     </div>
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
     <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Зарегистрироваться</button></form>
+    <p class="meta">Уже есть аккаунт? <a href="{% url 'accounts:login' %}">Войти</a></p>
 </section>
 {% endblock %}

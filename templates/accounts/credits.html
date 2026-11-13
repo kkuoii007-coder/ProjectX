@@ -1,19 +1,16 @@
 {% extends 'base.html' %}
+{% block title %}Кредиты · Philosophy Reader{% endblock %}
 {% block content %}
 <div class="page-head">
     <p class="kicker">Кабинет</p>
     <h1>Кредиты</h1>
 </div>
 <div class="wrap">
-    <nav class="account-nav" aria-label="Разделы кабинета">
-        <a href="{% url 'account:favorites' %}">Избранное</a>
-        <a href="{% url 'account:words' %}">Слова</a>
-        <a href="{% url 'account:security' %}">Безопасность</a>
-        <a href="{% url 'account:export' %}">Экспорт данных</a>
-    </nav>
+    {% include 'includes/account_nav.html' with active='credits' %}
     <section class="account-section">
         <h2 class="section-title">Баланс</h2>
-        <p class="balance-figure"><strong>{{ wallet.available_credits }} <small>доступно · в работе {{ wallet.reserved_credits }} · всего {{ wallet.total_credits }}</small></strong></p>
+        <p class="balance-figure"><strong>{{ wallet.available_credits }}</strong> <small>доступно</small></p>
+        <p class="meta">В работе {{ wallet.reserved_credits }} · всего {{ wallet.total_credits }}</p>
         <p class="meta"><a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p>
     </section>
     <section class="account-section">
@@ -23,15 +20,16 @@
                 запрос нужно отправить повторно самостоятельно.</p>
         </div>
     </section>
-    <section class="account-section" style="max-width: none;">
+    <section class="account-section account-section--wide">
         <h2 class="section-title">История</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="История операций с кредитами">
         <table>
             <thead>
                 <tr>
-                    <th>Дата</th>
-                    <th>Операция</th>
-                    <th>Сумма</th>
-                    <th>Причина</th>
+                    <th scope="col">Дата</th>
+                    <th scope="col">Операция</th>
+                    <th scope="col">Сумма</th>
+                    <th scope="col">Причина</th>
                 </tr>
             </thead>
             <tbody>
@@ -49,6 +47,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
     </section>
 </div>
 {% endblock %}

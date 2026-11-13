@@ -1,0 +1,13 @@
+<nav class="account-nav" aria-label="{% if user.is_authenticated %}Разделы кабинета{% else %}Доступ к кабинету{% endif %}">
+    {% if user.is_authenticated %}
+    <a href="{% url 'account:dashboard' %}"{% if active == 'dashboard' %} aria-current="page"{% endif %}>Кабинет</a>
+    <a href="{% url 'account:credits' %}"{% if active == 'credits' %} aria-current="page"{% endif %}>Кредиты</a>
+    <a href="{% url 'account:favorites' %}"{% if active == 'favorites' %} aria-current="page"{% endif %}>Избранное</a>
+    <a href="{% url 'account:words' %}"{% if active == 'words' %} aria-current="page"{% endif %}>Слова</a>
+    <a href="{% url 'account:security' %}"{% if active == 'security' %} aria-current="page"{% endif %}>Безопасность</a>
+    <a href="{% url 'account:export' %}">Экспорт данных</a>
+    {% else %}
+    <a href="{% url 'accounts:login' %}"{% if active == 'login' %} aria-current="page"{% endif %}>Вход</a>
+    <a href="{% url 'accounts:register' %}"{% if active == 'register' %} aria-current="page"{% endif %}>Регистрация</a>
+    {% endif %}
+</nav>

@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.ai.models import AIJob
@@ -171,7 +172,7 @@ def change_password(request):
             user.save()
             update_session_auth_hash(request, user)
             messages.success(request, "Пароль изменён, остальные сеансы отозваны")
-    return redirect("accounts:security")
+    return redirect("account:security")
 
 
 @require_http_methods(["GET", "POST"])
@@ -188,7 +189,7 @@ def words(request):
             defaults={"translation_ru": form.cleaned_data["translation_ru"], "context_en": form.cleaned_data["context_en"], "source_reference": publication},
         )
         messages.success(request, "Слово сохранено")
-        return redirect("accounts:words")
+        return redirect("account:words")
     return render(request, "accounts/words.html", {"words": SavedWord.objects.filter(user=request.user), "form": form})
 
 
@@ -208,7 +209,12 @@ def favorite_toggle(request, publication_id):
         favorite.delete()
     else:
         Favorite.objects.create(user=request.user, publication=publication)
-    return redirect(request.POST.get("next") or "accounts:favorites")
+    next_url = request.POST.get("next", "").strip()
+    if url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(next_url)
+    return redirect("account:favorites")
 
 
 @require_GET
@@ -230,7 +236,7 @@ def export_data(request):
 def delete_account(request):
     if not request.user.check_password(request.POST.get("password", "")):
         messages.error(request, "Пароль неверен")
-        return redirect("accounts:security")
+        return redirect("account:security")
     user = request.user
     purge_user_data(user, reason="Удаление аккаунта пользователем через кабинет")
     logout(request)
