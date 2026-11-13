@@ -13,8 +13,7 @@
     </nav>
     <section class="account-section">
         <h2 class="section-title">Баланс</h2>
-        <p class="balance-figure"><strong>{{ wallet.available_credits }} <small>доступно · в работе {{
-                    wallet.reserved_credits }} · всего {{ wallet.total_credits }}</small></strong></p>
+        <p class="balance-figure"><strong>{{ wallet.available_credits }} <small>доступно · в работе {{ wallet.reserved_credits }} · всего {{ wallet.total_credits }}</small></strong></p>
         <p class="meta"><a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p>
     </section>
     <section class="account-section">

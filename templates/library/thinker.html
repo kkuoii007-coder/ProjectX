@@ -9,8 +9,7 @@
     <div class="cards">
         {% for p in publications %}
         <article class="publication-card">
-            <h2 class="publication-card__title"><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru
-                    }}</a></h2>
+            <h2 class="publication-card__title"><a href="{% url 'library:read' p.slug %}">{{ p.revision.payload.title_ru }}</a></h2>
         </article>
         {% empty %}
         <p>Материалов пока нет.</p>

@@ -189,37 +189,38 @@ def claim_next_job():
 def run_review_cycle(provider, job, result):
     """One review -> (one repair -> fresh review) cycle, shared by providers.
 
-    The candidate survives only when the final review passes; otherwise the
-    outcome becomes no_charge_failure with a saved free explanation. Calls
-    are capped by AI_MAX_PROVIDER_CALLS_PER_JOB (generate/edit -> review ->
-    repair -> review = 4).
+    Owner decision (Nov 2026): the user must always receive a text. The
+    review still runs and still drives one repair attempt, but its verdict
+    never discards the candidate: on any non-pass verdict the latest
+    (possibly repaired) payload is delivered together with a saved review
+    note describing the remaining issues. Calls are capped by
+    AI_MAX_PROVIDER_CALLS_PER_JOB (generate/edit -> review -> repair ->
+    review = 4).
     """
     review = provider.review(result["payload"], job)
     if review.get("verdict") == "pass":
         result["review"] = {"passed": True, "review": review}
         return result
-    if review.get("verdict") != "repair" or not hasattr(provider, "repair"):
-        result["review"] = {"passed": False, "review": review, "message_ru": _review_failure_message(review)}
-        return result
-    repaired = provider.repair(result["payload"], review.get("issues", []), job)
-    if repaired is None:
-        result["review"] = {"passed": False, "review": review, "message_ru": "Не удалось исправить кандидата"}
-        return result
-    re_review = provider.review(repaired, job)
-    if re_review.get("verdict") == "pass":
-        result["payload"] = repaired
-        result["review"] = {"passed": True, "review": re_review}
-    else:
-        result["review"] = {"passed": False, "review": re_review, "message_ru": _review_failure_message(re_review)}
+    if review.get("verdict") == "repair" and hasattr(provider, "repair"):
+        repaired = provider.repair(result["payload"], review.get("issues", []), job)
+        if repaired is not None:
+            result["payload"] = repaired
+            re_review = provider.review(repaired, job)
+            review = re_review if re_review.get("verdict") == "pass" else review
+            if re_review.get("verdict") == "pass":
+                result["review"] = {"passed": True, "review": re_review}
+                return result
+    # Fail (or failed repair/re-review): deliver anyway with a review note.
+    result["review"] = {"passed": False, "review": review, "message_ru": _review_note_message(review)}
     return result
 
 
-def _review_failure_message(review):
+def _review_note_message(review):
+    """Free note delivered together with a non-passed review."""
     issues = review.get("issues") or []
-    for issue in issues:
-        if issue.get("severity") == "blocking":
-            return f"Проверка не пройдена: {issue.get('reason_ru', 'содержательные проблемы')}"[:500]
-    return "Проверка качества не пройдена; результат не сохранён как полезный текст"
+    parts = [issue.get("reason_ru", "") for issue in issues if issue.get("severity") == "blocking" and issue.get("reason_ru")]
+    note = "Замечания проверки: " + "; ".join(parts) if parts else ""
+    return (note or "Проверка выявила замечания; текст доставлен без изменений")[:500]
 
 
 def _build_edit_context(job):
@@ -270,16 +271,10 @@ def execute_job(job):
             result = apply_edit(job, decision)
             if result["outcome"] == AIJob.Outcome.DELIVERED:
                 result = run_review_cycle(provider, job, result)
-                if not result["review"]["passed"]:
-                    result["outcome"] = AIJob.Outcome.NO_CHARGE_FAILURE
-                    result["payload"] = {}
         else:
             result = provider.generate(job)
             if result["outcome"] == AIJob.Outcome.DELIVERED:
                 result = run_review_cycle(provider, job, result)
-                if not result["review"]["passed"]:
-                    result["outcome"] = AIJob.Outcome.NO_CHARGE_FAILURE
-                    result["payload"] = {}
     except Exception as exc:
         with transaction.atomic():
             settle_reservation(job=job, charge=False)
@@ -307,14 +302,14 @@ def execute_job(job):
             )
             job.result_reference = {"explanation": "saved"}
         elif outcome == AIJob.Outcome.NO_CHARGE_FAILURE:
-            # Spec: a failed review may end as no_charge_failure only with a
-            # saved free explanation; it is not a technical failure.
+            # Kept for the model's own refusal-family outcomes only; a failed
+            # review no longer leads here (owner decision: always deliver).
             Message.objects.create(
                 project=job.project,
                 owner=job.owner,
                 role="assistant",
                 kind="review",
-                body=(result.get("review", {}) or {}).get("message_ru") or "Проверка качества не пройдена",
+                body=(result.get("review", {}) or {}).get("message_ru") or "Проверка выявила замечания",
                 job=job,
             )
             job.result_reference = {"review": "failed"}
@@ -322,14 +317,20 @@ def execute_job(job):
             Message.objects.create(project=job.project, owner=job.owner, role="assistant", kind="answer", body=result["answer"], job=job)
             job.result_reference = {"message_id": "answer"}
         else:
-            revision = Revision.objects.create(project=job.project, parent=job.base_revision, payload=result["payload"], created_by_job=job)
+            review = result.get("review") or {}
+            payload = result["payload"]
+            # Owner decision: a non-passed review never discards the text.
+            # The remaining issues are stored in the payload so the workshop
+            # page shows them next to the delivered draft.
+            if review and not review.get("passed") and review.get("message_ru") and payload:
+                payload = {**payload, "note": review["message_ru"]}
+            revision = Revision.objects.create(project=job.project, parent=job.base_revision, payload=payload, created_by_job=job)
             # Spec: a successful first series sets head automatically; a later
             # edit only adds a revision — head moves after explicit "apply".
             if job.kind == AIJob.Kind.GENERATE:
                 job.project.head_revision = revision
                 job.project.save(update_fields=["head_revision"])
             job.result_reference = {"revision_id": str(revision.pk)}
-            review = result.get("review") or {}
             if review and job.kind == AIJob.Kind.GENERATE:
                 from .models import QualityReport
 

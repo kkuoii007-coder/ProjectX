@@ -210,7 +210,10 @@ class EditJobFlowTests(TestCase):
         self.assertIsNotNone(report)
         self.assertEqual(report.revision_content_hash, self.project.head_revision.content_hash)
 
-    def test_failed_review_is_no_charge_failure_with_message(self):
+    def test_failed_review_still_delivers_text_with_note(self):
+        """Owner decision (Nov 2026): the review never discards the text.
+        A failed review delivers the candidate with a saved review note and
+        charges credits — the user always receives a text."""
         job, _ = create_job(
             owner=self.user, kind=AIJob.Kind.GENERATE, idempotency_key=uuid4().hex,
             instruction="fail-review", project=self.project,
@@ -218,15 +221,21 @@ class EditJobFlowTests(TestCase):
         execute_job(claim_next_job())
         job.refresh_from_db()
         self.assertEqual(job.status, AIJob.Status.SUCCEEDED)
-        self.assertEqual(job.outcome, AIJob.Outcome.NO_CHARGE_FAILURE)
+        self.assertEqual(job.outcome, AIJob.Outcome.DELIVERED)
+        # Credits are charged: a delivered text is a paid result.
         wallet = Wallet.objects.get(user=self.user)
-        self.assertEqual(wallet.total_credits, 30)
+        self.assertEqual(wallet.total_credits, 20)
         self.assertEqual(wallet.reserved_credits, 0)
-        # Free explanation is saved for the user.
-        self.assertTrue(self.project.messages.filter(kind="review", body__contains="блокирующая").exists())
-        # head remains on the base revision, the failed candidate is not saved
-        self.assertEqual(self.project.head_revision, self.base)
-        self.assertEqual(Revision.objects.filter(project=self.project).count(), 1)
+        # The candidate is saved as head revision with a review note.
+        self.project.refresh_from_db()
+        self.assertIsNotNone(self.project.head_revision)
+        note = self.project.head_revision.payload.get("note", "")
+        self.assertIn("Замечания проверки", note)
+        self.assertIn("блокирующая", note)
+        # Quality report records the failed review for the saved revision.
+        report = QualityReport.objects.filter(revision=self.project.head_revision).first()
+        self.assertIsNotNone(report)
+        self.assertEqual(report.review_json.get("verdict"), "fail")
 
     def test_repair_review_flow_repairs_and_reapplies_review(self):
         job, _ = create_job(
