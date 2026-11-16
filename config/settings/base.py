@@ -62,6 +62,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.accounts.context_processors.account_summary",
+                "apps.workshop.context_processors.features",
             ],
         },
     }
@@ -136,6 +137,17 @@ USER_AI_REQUESTS_PER_HOUR = 20
 WEB_SEARCH_ENABLED = False
 WEB_FETCH_ENABLED = False
 COMMUNITY_ENABLED = False
+# The paid question about a text ("ask") is switched off until it is fixed:
+# the live path can save an empty answer and still charge a credit. While
+# off, the request is refused before any job or reservation is created.
+ASK_ENABLED = env_bool("ASK_ENABLED", False)
+
+# The reading shown on the cover of the home page. It is named explicitly:
+# the home page never falls back to "the latest published text". Empty or
+# unpublished -> the cover says that the first question is coming soon.
+START_READING_SLUG = env("START_READING_SLUG", "what-does-it-mean-to-be-brave")
+# Address behind the single "Write to us" link at the end of a text.
+CONTACT_EMAIL = env("CONTACT_EMAIL", "evgeniy.shults.2016@mail.ru")
 
 # Stage 5: sources and RAG (docs/spec/docs/configuration.md).
 SOURCE_UPLOAD_MAX_BYTES = env_int("SOURCE_UPLOAD_MAX_BYTES", 5 * 1024 * 1024)

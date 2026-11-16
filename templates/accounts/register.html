@@ -1,10 +1,15 @@
 {% extends 'base.html' %}
 {% block title %}Регистрация · Philosophy Reader{% endblock %}
 {% block content %}
+<header class="page-head">
+  <div class="wrap">
+    <h1>Регистрация</h1>
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
 <section class="form-page">
     {% include 'includes/account_nav.html' with active='register' %}
-    <p class="kicker">Регистрация</p>
-    <h1>Регистрация</h1>
     <div class="warning">
         <strong>Проект работает в тестовом режиме.<br>Восстановления доступа пока нет.</strong>
         <p>Мы не запрашиваем email или телефон. Если вы забудете логин или пароль, вернуть доступ к кабинету, текстам и
@@ -12,6 +17,7 @@
     </div>
     {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
     <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Зарегистрироваться</button></form>
-    <p class="meta">Уже есть аккаунт? <a href="{% url 'accounts:login' %}">Войти</a></p>
+    <p class="meta">Уже есть аккаунт? <a class="tap" href="{% url 'accounts:login' %}">Войти</a></p>
 </section>
+</div>
 {% endblock %}

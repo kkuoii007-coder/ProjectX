@@ -17,6 +17,12 @@ CHANGELOG.md and docs/). Those documents are the source of truth.
 - No network calls inside DB transactions; no AI calls in reader HTTP path.
 - Secrets never enter Git. On the server .env holds ONLY OPENROUTER_API_KEY;
   other secrets live in /etc/philosophy-reader/service.env (systemd).
+- Ready-made texts enter the library only through `submit_text` ->
+  `review_text` -> `publish_text` (the `publish_revision` gate). Never create
+  `Publication` or `QualityReport` by hand and never loosen the gate. The text
+  itself is stored unchanged; nothing may state that a human checked it.
+- The home page shows the reading named in `START_READING_SLUG`, never
+  "the latest published".
 - FakeProvider is allowed only when AI_PROVIDER=fake in dev/test.
   Production failures must surface as errors, never as fake content.
 - Welcome grant (30 credits default) is issued exactly once, atomically
@@ -32,19 +38,36 @@ templates/, static/, tests/, content/, docs/spec/, deploy/
 
 ## Frontend
 
-Direction "Gloss in the margin": the translation is a reader's note in the
-margin (right margin at >=82rem, under the sentence on narrow screens).
+Direction "A question on the cover": every page opens with a field in the
+cover tone that carries the header and a large title; the content follows in
+ink on paper. A translation opens under its own sentence, at any width.
 
 - `static/css/main.css` — all styles; colours, type, spacing and radii are CSS
-  custom properties at the top. One accent only (`--rubric`); the dark band is
-  reserved for the AI workshop. Do not add ad-hoc colours; keep text contrast
-  >= WCAG AA (4.5:1).
+  custom properties at the top. The cover palette is closed: three tones,
+  `--cover-clay` #8a3a26, `--cover-sea` #1f4d5c, `--cover-olive` #4a5626,
+  chosen with `data-cover`; text on a cover is `--on-cover` (paper). Each
+  published question has one tone (`Publication.cover_tone`); account, sign-in,
+  workshop and help pages use clay. There is no other accent and no dark band.
+  Do not add ad-hoc colours; keep text contrast >= WCAG AA (4.5:1) on every
+  tone. The fork mark is drawn in code; no portraits or images.
+- Language. Reading path (home, library, thinker, collection, reader): a plain
+  English line with a small Russian caption under it (`.ru-ui`, `lang="ru"`).
+  The `RU` switch in the header hides these captions (`localStorage`
+  `pr-ui-ru`), never the translations of sentences. Account, sign-in,
+  registration and workshop pages stay Russian.
+- The first screen of the home page holds only the question, two sentences of
+  the text, `Start reading` and the small line: no registration, credits,
+  generator or search. One text appears on the home page once.
 - `static/css/fonts.css` + `static/fonts/` — Literata (text, headings) and
   Golos Text (UI, translations), self-hosted woff2 with their OFL texts.
   No external font/CDN requests.
-- `static/js/reader.js` — the only JS (~170 lines, no dependencies). Pages must
+- `static/js/reader.js` — the only JS file (~165 lines, no dependencies), plus
+  one inline line in `<head>` that sets the `js` and `ui-ru-off` classes before
+  the first paint and removes them if the file fails to load. Pages must
   stay usable without JS: translations visible, menu expanded.
-- `templates/base.html`; page templates in `templates/<app>/`. Reader markup:
+- `templates/base.html` (Russian service pages) and `templates/base_reading.html`
+  (reading path: `lang="en"`, header with the name and the `RU` switch only);
+  page templates in `templates/<app>/`. One sentence per line. Reader markup:
   `span.s[data-gloss]` + `span.gloss[role=note][lang=ru]`. Working JS adds
   `[role=button][tabindex=0][aria-expanded][aria-controls]` to each sentence;
   without JS these remain ordinary prose with visible translations, not dead
@@ -60,9 +83,11 @@ margin (right margin at >=82rem, under the sentence on narrow screens).
   publication entries live in `templates/includes/`. Do not split Django tags
   or variable expressions across newlines. All POST forms must render a real
   CSRF input, including forms inside `details`.
-- Test 390/768/1440 plus 320px, script failure and no-JS. One open translation
-  uses the wide margin; several open translations move inline to avoid drifting
-  or overlapping notes. Keep English/Russian learning payloads unchanged.
+- Test 390/768/1440 plus 320px, script failure and no-JS. On 390x844 the first
+  English sentence of a text is visible without scrolling. A fork in the text
+  (`data-fork`) reveals one prepared line per choice; it is not a form and
+  nothing is sent, saved or scored; without JS it is plain paragraphs. Keep
+  English/Russian learning payloads unchanged.
 - Tables use `.table-scroll` with a focusable labelled region. Keep auth,
   registration, error, empty and workshop states at the same quality as home.
 - Use isolated PostgreSQL + pgvector and `AI_PROVIDER=fake`,

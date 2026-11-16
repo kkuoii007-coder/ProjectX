@@ -1,6 +1,7 @@
 import hashlib
 import json
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
@@ -33,6 +34,10 @@ class EditScopeError(JobError):
     code = "edit_scope_violation"
 
 
+class AskDisabled(JobError):
+    code = "ask_disabled"
+
+
 def canonical_hash(payload):
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -40,6 +45,9 @@ def canonical_hash(payload):
 
 def create_job(*, owner, kind, idempotency_key, instruction="", project=None, base_revision=None, target_id=""):
     """Create a paid job with credit reservation in one DB transaction."""
+    if kind == AIJob.Kind.ASK and not settings.ASK_ENABLED:
+        # Refused for every caller before any job, reservation or message.
+        raise AskDisabled("Вопросы по тексту пока выключены")
     input_json = {"instruction": instruction.strip()[: settings.MAX_EDIT_INSTRUCTION_CHARS if kind in (AIJob.Kind.EDIT_SENTENCE, AIJob.Kind.EDIT_PART, AIJob.Kind.EDIT_SERIES) else settings.MAX_USER_PROMPT_CHARS], "kind": kind}
     if target_id:
         input_json["target_id"] = target_id
@@ -89,6 +97,241 @@ def create_job(*, owner, kind, idempotency_key, instruction="", project=None, ba
         if project:
             Message.objects.create(project=project, owner=owner, role="user", kind=kind, body=instruction, job=job)
         return job, True
+
+
+class ReviewNotAllowed(JobError):
+    code = "review_not_allowed"
+
+
+def create_review_job(*, revision, actor="cli"):
+    """Queue one live review of an existing revision. Returns (job, created).
+
+    No generation, no repair and no user credits: the cost goes to the
+    owner budget only. The review needs a verified knowledge card linked to
+    the revision — without it the reviewer could only answer "unverified"
+    and the paid call would be wasted. A queued or running review of the
+    same revision is reused instead of duplicated.
+    """
+    from apps.library.editorial import check_editorial_payload, verified_cards
+    from apps.operations.models import AuditEvent
+
+    if not verified_cards(revision):
+        raise ReviewNotAllowed("Нет проверенной карточки знаний, связанной с ревизией")
+    errors, _ = check_editorial_payload(revision.payload)
+    if errors:
+        raise ReviewNotAllowed("Текст не проходит структурную проверку: " + "; ".join(errors[:5]))
+    input_json = {"kind": AIJob.Kind.REVIEW, "revision_id": revision.pk, "content_hash": revision.content_hash}
+    with transaction.atomic():
+        Revision.objects.select_for_update().get(pk=revision.pk)
+        existing = AIJob.objects.filter(
+            kind=AIJob.Kind.REVIEW, base_revision=revision, status__in=[AIJob.Status.QUEUED, AIJob.Status.RUNNING]
+        ).first()
+        if existing:
+            return existing, False
+        job = AIJob.objects.create(
+            owner=revision.project.owner,
+            kind=AIJob.Kind.REVIEW,
+            project=revision.project,
+            base_revision=revision,
+            input_json=input_json,
+            input_hash=canonical_hash(input_json),
+            idempotency_key=uuid.uuid4().hex,
+            reserved_credits=0,
+            policy_version=settings.CREDIT_POLICY_VERSION,
+        )
+        AuditEvent.objects.create(
+            actor_reference=actor,
+            action="editorial_review_requested",
+            object_reference=f"revision:{revision.pk}",
+            reason="Живая проверка ревизии",
+            sanitized_metadata={"job": str(job.pk), "revision_hash": revision.content_hash},
+        )
+    return job, True
+
+
+def claim_job(job):
+    """Claim one specific queued job (used by commands that run a review
+    in place). Returns None if the worker already took it."""
+    with transaction.atomic():
+        locked = AIJob.objects.select_for_update(skip_locked=True).filter(pk=job.pk, status=AIJob.Status.QUEUED).first()
+        if not locked:
+            return None
+        locked.status = AIJob.Status.RUNNING
+        locked.lease_token = uuid.uuid4().hex
+        locked.lease_until = timezone.now() + timedelta(seconds=settings.AI_LEASE_SECONDS)
+        locked.save(update_fields=["status", "lease_token", "lease_until", "updated_at"])
+        return locked
+
+
+REVIEW_VERDICTS = ("pass", "repair", "fail")
+FACTUAL_STATES = ("supported", "mixed", "unsupported", "unverified")
+
+
+def _clean_review(review):
+    """The reviewer's answer is untrusted data: keep only the known shape.
+
+    Anything unexpected degrades to the non-publishable side. A field of
+    the wrong type is never dropped silently: the verdict becomes "fail"
+    and a blocking remark records why. Blocking remarks are kept first, so
+    the stored cap of 20 cannot hide one.
+    """
+    malformed = []
+    if not isinstance(review, dict):
+        review, malformed = {}, ["ответ не является объектом"]
+
+    def strings(key):
+        value = review.get(key) or []
+        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+            malformed.append(f"поле {key} имеет неверный вид")
+            return []
+        return [item[:500] for item in value][:20]
+
+    raw_issues = review.get("issues") or []
+    if not isinstance(raw_issues, list):
+        malformed.append("поле issues не является списком")
+        raw_issues = []
+    issues = []
+    for issue in raw_issues:
+        if not isinstance(issue, dict):
+            malformed.append("замечание в issues не является объектом")
+            continue
+        cleaned = {
+            "code": str(issue.get("code", ""))[:60],
+            # Only an explicit "nonblocking" is non-blocking.
+            "severity": "nonblocking" if issue.get("severity") == "nonblocking" else "blocking",
+            "reason_ru": str(issue.get("reason_ru", ""))[:500],
+        }
+        for key in ("part_key", "sentence_key", "proposed_fix_ru"):
+            if issue.get(key):
+                cleaned[key] = str(issue[key])[:500]
+        issues.append(cleaned)
+    raw_claims = review.get("unsupported_claims") or []
+    if not isinstance(raw_claims, list) or any(not isinstance(claim, dict) for claim in raw_claims):
+        malformed.append("поле unsupported_claims имеет неверный вид")
+        raw_claims = []
+    claims = [
+        {"claim_text": str(claim.get("claim_text", ""))[:400], "reason": str(claim.get("reason", ""))[:400]}
+        for claim in raw_claims[:20]
+    ]
+    language_notes, translation_issues, uncertainty_notes = strings("language_notes"), strings("translation_issues"), strings("uncertainty_notes")
+    verdict = review.get("verdict")
+    factual_state = review.get("factual_state")
+    if verdict not in REVIEW_VERDICTS:
+        malformed.append("неизвестный verdict")
+    if factual_state not in FACTUAL_STATES:
+        malformed.append("неизвестный factual_state")
+    if malformed:
+        verdict = "fail"
+        issues.insert(0, {
+            "code": "malformed_review",
+            "severity": "blocking",
+            "reason_ru": ("Ответ проверяющей модели имеет неверную структуру: " + "; ".join(dict.fromkeys(malformed)))[:500],
+        })
+    issues.sort(key=lambda issue: issue["severity"] != "blocking")  # stable: blocking first
+    return {
+        "verdict": verdict,
+        "factual_state": factual_state if factual_state in FACTUAL_STATES else "unverified",
+        "issues": issues[:20],
+        "unsupported_claims": claims,
+        "language_notes": language_notes,
+        "translation_issues": translation_issues,
+        "uncertainty_notes": uncertainty_notes,
+    }
+
+
+def _review_is_eligible(review):
+    """A cleaned review allows publication only when nothing is open."""
+    return (
+        review["verdict"] == "pass"
+        and review["factual_state"] == "supported"
+        and not any(issue["severity"] == "blocking" for issue in review["issues"])
+        and not review["unsupported_claims"]
+    )
+
+
+def _save_provider_attempts(job, provider, state):
+    """Every paid call leaves a ProviderAttempt row, also when the job fails
+    after the call (for example on an unreadable answer)."""
+    from .models import ProviderAttempt
+
+    for stage_number, attempt in enumerate(getattr(provider, "_attempts", None) or [], start=1):
+        ProviderAttempt.objects.create(
+            job=job,
+            stage_number=stage_number,
+            request_hash=attempt["request_hash"],
+            state=state,
+            provider_request_id=attempt["provider_request_id"] or "",
+            model=attempt["model"],
+            provider="openrouter",
+            usage_json=attempt["usage_json"],
+            cost_usd=attempt.get("cost_usd"),
+            sent_at=timezone.now(),
+            completed_at=timezone.now(),
+        )
+
+
+def _execute_review_job(job):
+    """One live reviewer call for job.base_revision -> QualityReport.
+
+    The text is never changed here: there is no repair step and the
+    reviewer's proposed fixes are stored as remarks only.
+    """
+    from apps.library.editorial import card_snapshot, card_version_record, check_editorial_payload, verified_cards
+
+    from .models import QualityReport
+
+    revision = job.base_revision
+    provider = None
+    try:
+        if revision is None:
+            raise ReviewNotAllowed("Ревизия для проверки недоступна")
+        cards = verified_cards(revision)
+        if not cards:
+            raise ReviewNotAllowed("Нет проверенной карточки знаний, связанной с ревизией")
+        errors, diagnostics = check_editorial_payload(revision.payload)
+        if errors:
+            raise ReviewNotAllowed("Текст не проходит структурную проверку")
+        provider = get_provider()
+        # Network happens here, strictly outside DB transactions.
+        review = _clean_review(provider.review_revision(revision.payload, [card_snapshot(card) for card in cards], job))
+    except Exception as exc:
+        with transaction.atomic():
+            _save_provider_attempts(job, provider, "failed")
+            job.status = AIJob.Status.FAILED
+            job.outcome = None
+            job.error_code = getattr(exc, "code", "provider_unavailable")
+            job.result_reference = {"message": str(exc)[:300]}
+            job.completed_at = timezone.now()
+            job.save()
+        return job
+    attempts = getattr(provider, "_attempts", None) or []
+    blocking = [issue for issue in review["issues"] if issue["severity"] == "blocking"]
+    with transaction.atomic():
+        report = QualityReport.objects.create(
+            revision=revision,
+            revision_content_hash=revision.content_hash,
+            deterministic_json=diagnostics,
+            review_json=review,
+            review_model=attempts[-1]["model"] if attempts else "",
+            prompt_version=getattr(provider, "editorial_review_prompt_version", "fake"),
+            schema_version="review-1",
+            card_versions_json=[card_version_record(card) for card in cards],
+            factual_state=review["factual_state"],
+            eligibility_state="eligible" if _review_is_eligible(review) else "ineligible",
+        )
+        _save_provider_attempts(job, provider, "completed")
+        job.status = AIJob.Status.SUCCEEDED
+        job.outcome = AIJob.Outcome.DELIVERED
+        job.stage = "finalize"
+        job.result_reference = {
+            "quality_report_id": report.pk,
+            "verdict": review["verdict"],
+            "factual_state": review["factual_state"],
+            "blocking_issues": len(blocking),
+        }
+        job.completed_at = timezone.now()
+        job.save()
+    return job
 
 
 def get_provider():
@@ -156,6 +399,19 @@ class FakeProvider:
         if "repair-review" in instruction and not any("repaired" in json.dumps(part, ensure_ascii=False) for part in payload.get("parts", [])):
             return {"verdict": "repair", "factual_state": "mixed", "issues": [{"code": "fixable", "severity": "blocking", "reason_ru": "Тестовая исправимая проблема"}]}
         return {"verdict": "pass", "factual_state": "unverified", "issues": []}
+
+    def review_revision(self, payload, cards, job=None):
+        """Editorial review stub for dev/test. It never confirms the facts:
+        only a live reviewer call may produce a publishable report."""
+        return {
+            "verdict": "pass",
+            "factual_state": "unverified",
+            "issues": [],
+            "unsupported_claims": [],
+            "language_notes": [],
+            "translation_issues": [],
+            "uncertainty_notes": ["Тестовый провайдер: живая проверка не выполнялась, фактическая опора не подтверждена"],
+        }
 
     def repair(self, payload, issues, job=None):
         """Deterministic repair for dev/test: replaces the flagged marker
@@ -262,6 +518,20 @@ def _build_edit_context(job):
 
 
 def execute_job(job):
+    if job.kind == AIJob.Kind.REVIEW:
+        return _execute_review_job(job)
+    if job.kind == AIJob.Kind.ASK and not settings.ASK_ENABLED:
+        # A question queued before the switch was turned off: no provider
+        # call, the reservation is released, nothing is charged.
+        with transaction.atomic():
+            settle_reservation(job=job, charge=False)
+            job.status = AIJob.Status.FAILED
+            job.outcome = None
+            job.error_code = AskDisabled.code
+            job.result_reference = {"message": "Вопросы по тексту пока выключены"}
+            job.completed_at = timezone.now()
+            job.save()
+        return job
     provider = get_provider()
     is_edit = job.kind in (AIJob.Kind.EDIT_SENTENCE, AIJob.Kind.EDIT_PART, AIJob.Kind.EDIT_SERIES)
     try:

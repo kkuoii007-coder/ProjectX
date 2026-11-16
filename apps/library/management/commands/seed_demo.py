@@ -2,10 +2,9 @@ import hashlib
 import json
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
-from apps.ai.models import QualityReport
-from apps.library.models import Collection, CollectionItem, KnowledgeCard, Publication, Thinker, Topic
+from apps.library.editorial import editorial_owner
+from apps.library.models import Thinker, Topic
 from apps.workshop.models import Project, Revision
 
 
@@ -50,17 +49,14 @@ PAYLOAD = {
 
 
 class Command(BaseCommand):
-    help = "Create an idempotent editorial demo publication in English and Russian"
+    help = "Create an idempotent demo draft (Socrates) for local development; nothing is published"
 
     def handle(self, *args, **options):
         thinker, _ = Thinker.objects.update_or_create(slug="socrates", defaults={"name_en": "Socrates", "name_ru": "Сократ"})
-        topic, _ = Topic.objects.update_or_create(slug="socratic-method", defaults={"name_en": "Socratic method", "name_ru": "Сократический метод"})
+        Topic.objects.update_or_create(slug="socratic-method", defaults={"name_en": "Socratic method", "name_ru": "Сократический метод"})
         # Editorial revisions live in a dedicated inactive system project,
         # independent of any real user account.
-        from django.contrib.auth import get_user_model
-        owner = get_user_model().objects.filter(login="editorial").first()
-        if owner is None:
-            owner = get_user_model().objects.create_user(login="editorial", password=None, is_active=False)
+        owner = editorial_owner()
         project, _ = Project.objects.get_or_create(owner=owner, title="Editorial: Socratic method", mode=Project.Mode.EXPLAIN)
         canonical_hash = hashlib.sha256(json.dumps(PAYLOAD, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         revision = project.revisions.filter(content_hash=canonical_hash).first()
@@ -68,15 +64,9 @@ class Command(BaseCommand):
             revision = Revision.objects.create(project=project, payload=PAYLOAD)
         project.head_revision = revision
         project.save(update_fields=["head_revision"])
-        card, _ = KnowledgeCard.objects.update_or_create(
-            slug="socratic-method", version=1,
-            defaults={"title": "Socratic method", "facts_json": [{"fact_id": "socrates-no-books", "text": "Socrates wrote no books", "type": "historical"}], "verification_status": KnowledgeCard.Status.VERIFIED, "verified_at": timezone.now()},
-        )
-        report = QualityReport.objects.filter(revision=revision, revision_content_hash=canonical_hash).first()
-        if report is None:
-            report = QualityReport.objects.create(revision=revision, revision_content_hash=canonical_hash, deterministic_json={"sentences_en_ru": True}, factual_state="supported", eligibility_state="eligible")
-        publication, _ = Publication.objects.update_or_create(slug="socrates-questions", defaults={"revision": revision, "quality_report": report, "thinker": thinker, "status": Publication.Status.PUBLISHED, "published_at": timezone.now(), "published_by": owner})
-        publication.topics.set([topic])
-        collection, _ = Collection.objects.update_or_create(slug="first-steps", defaults={"title_ru": "Первые шаги в философии", "description_ru": "Короткие редакционные введения для спокойного чтения."})
-        CollectionItem.objects.get_or_create(collection=collection, publication=publication, defaults={"position": 1})
-        self.stdout.write(self.style.SUCCESS(f"Seeded publication: {publication.slug}"))
+        # The demo text is a draft. It used to be published here directly,
+        # bypassing publish_revision; texts now reach the library only
+        # through submit_text -> review_text -> publish_text. An existing
+        # publication is left as it is: withdraw it with
+        # `withdraw_publication socrates-questions`.
+        self.stdout.write(self.style.SUCCESS(f"Seeded draft revision {revision.pk} ({thinker.name_en}); not published"))

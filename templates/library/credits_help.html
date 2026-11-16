@@ -1,11 +1,15 @@
 {% extends 'base.html' %}
 {% block title %}Как работают кредиты · Philosophy Reader{% endblock %}
 {% block content %}
-<div class="page-head">
+<header class="page-head">
+  <div class="wrap">
     <p class="kicker">Справка</p>
     <h1>Как работают кредиты</h1>
-    <p class="meta">Чтение и готовый перевод бесплатны. Кредиты нужны для работы в мастерской.</p>
-</div>
+    <p class="page-head__lead">Чтение и готовый перевод бесплатны. Кредиты нужны для работы в мастерской.</p>
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
 <article class="prose">
     <p>После регистрации вы один раз получаете <strong>{{ welcome }} бесплатных кредитов</strong>. Отдельное подтверждение стоимости перед действием не требуется.</p>
     <section>
@@ -15,7 +19,7 @@
             <li>Перегенерация серии: <strong>{{ costs.edit_series }}</strong></li>
             <li>Правка части: <strong>{{ costs.edit_part }}</strong></li>
             <li>Правка предложения: <strong>{{ costs.edit_sentence }}</strong></li>
-            <li>Вопрос: <strong>{{ costs.ask }}</strong></li>
+            {% if ask_enabled %}<li>Вопрос: <strong>{{ costs.ask }}</strong></li>{% endif %}
             <li>Чтение и готовый перевод: <strong>0</strong></li>
         </ul>
     </section>
@@ -27,6 +31,7 @@
         <h2>Пополнение</h2>
         <p><strong>Продажи кредитов сейчас не включены.</strong> В закрытом тесте пополнение выполняет владелец через административную команду; кнопка покупки не имитируется.</p>
     </section>
-    <p>{% if user.is_authenticated %}<a href="{% url 'account:credits' %}">Посмотреть баланс и историю</a>{% else %}<a href="{% url 'library:library' %}">Выбрать текст в библиотеке</a>{% endif %}</p>
+    <p>{% if user.is_authenticated %}<a class="tap" href="{% url 'account:credits' %}">Посмотреть баланс и историю</a>{% else %}<a class="tap" href="{% url 'library:library' %}">Выбрать текст в библиотеке</a>{% endif %}</p>
 </article>
+</div>
 {% endblock %}

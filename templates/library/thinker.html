@@ -1,22 +1,24 @@
-{% extends 'base.html' %}
-{% block title %}{{ thinker.name_ru }} · Philosophy Reader{% endblock %}
+{% extends 'base_reading.html' %}
+{% block title %}{{ thinker.name_en }} · Philosophy Reader{% endblock %}
 {% block content %}
-<div class="page-head">
-    <p class="kicker">Мыслитель</p>
-    <h1>{{ thinker.name_ru }}</h1>
-    <p class="meta" lang="en">{{ thinker.name_en }}</p>
-</div>
-<div class="wrap">
-    <p class="meta"><a href="{% url 'library:library' %}">Все тексты библиотеки</a></p>
-    <div class="catalog-list">
-        {% for p in publications %}
-        {% include 'includes/publication_card.html' with p=p %}
-        {% empty %}
-        <div class="empty-state">
-            <p>Материалов пока нет. В библиотеке можно почитать о других мыслителях.</p>
-            <p><a href="{% url 'library:library' %}">В библиотеку</a></p>
-        </div>
-        {% endfor %}
+<header class="page-head">
+  <div class="wrap">
+    <p class="kicker">Thinker<span class="ru-ui" lang="ru">Мыслитель</span></p>
+    <h1>{{ thinker.name_en }}</h1>
+    {% if thinker.name_ru %}<p class="ru-ui" lang="ru">{{ thinker.name_ru }}</p>{% endif %}
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
+  <div class="catalog-list">
+    {% for item in items %}
+    {% include 'includes/question_card.html' with item=item hide_thinker=True %}
+    {% empty %}
+    <div class="empty-state">
+      <h2>No texts here yet.<span class="ru-ui" lang="ru">Материалов пока нет.</span></h2>
     </div>
+    {% endfor %}
+  </div>
+  <p class="back-link"><a href="{% url 'library:library' %}">All texts<span class="ru-ui" lang="ru">Все тексты библиотеки</span></a></p>
 </div>
 {% endblock %}

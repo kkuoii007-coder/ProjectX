@@ -1,154 +1,53 @@
-{% extends 'base.html' %}
-{% load ui %}
+{% extends 'base_reading.html' %}
+{% block theme_color %}{% if start.tone == 'sea' %}#1f4d5c{% elif start.tone == 'olive' %}#4a5626{% else %}#8a3a26{% endif %}{% endblock %}
+{% block cover_tone %}{{ start.tone|default:'clay' }}{% endblock %}
 {% block body_class %}page-home{% endblock %}
 {% block content %}
-<section class="hero" aria-labelledby="hero-title">
-  <div class="wrap hero__grid">
-    <div class="hero__copy">
-      <p class="kicker">Журнал для вдумчивого чтения <span class="language-pair" lang="en">EN / RU</span></p>
-      <h1 class="hero__title" id="hero-title">Сложные идеи.<br><em>Простой английский.</em></h1>
-      <p class="hero__lead">Читайте философию небольшими частями. Нажмите на любое английское предложение — перевод появится рядом, как заметка на полях.</p>
-      <div class="hero__actions">
-        {% if featured %}<a class="btn" href="{% url 'library:read' featured.publication.slug %}">Начать читать</a>{% endif %}
-        <a class="text-link" href="{% url 'library:library' %}">Вся библиотека <span aria-hidden="true">↗</span></a>
-      </div>
-      <p class="hero__note">Читайте без регистрации. Открывайте перевод по нажатию.</p>
-    </div>
-    {% if featured.specimen %}
-    <figure class="specimen" data-glossary>
-      <figcaption class="specimen__label"><span>На полях</span><span lang="en">EN → RU</span></figcaption>
-      <p class="specimen__instruction">Попробуйте: нажмите на предложение</p>
-      <p class="specimen__text">
-        <span class="s" lang="en" data-gloss="{{ featured.specimen.id }}">{{ featured.specimen.en }}</span>
-        <span class="gloss" id="{{ featured.specimen.id }}" lang="ru" role="note">{{ featured.specimen.ru }}</span>
-      </p>
-      <p class="specimen__source">
-        {% if featured.publication.thinker %}<span>{{ featured.publication.thinker.name_ru }}</span> · {% endif %}<span lang="en">{{ featured.specimen.part_title }}</span>
-        <a href="{% url 'library:read' featured.publication.slug %}">Читать целиком <span aria-hidden="true">→</span></a>
-      </p>
-    </figure>
+{% with size=start.title_en|length %}
+<section class="cover{% if not start %} cover--plain{% elif size > 52 %} cover--long{% elif size > 32 %} cover--medium{% endif %}" aria-labelledby="question">
+  <div class="wrap cover__inner">
+    {% if start %}
+    <h1 class="question" id="question"{% if start.title_lang == 'ru' %} lang="ru"{% endif %}>{{ start.title_en }}</h1>
+    {% elif others %}
+    <h1 class="question" id="question">Choose a question.</h1>
+    <p class="question__ru ru-ui" lang="ru">Выберите вопрос.</p>
+    {% else %}
+    <h1 class="question" id="question">The first question is coming soon.</h1>
+    <p class="question__ru ru-ui" lang="ru">Первый вопрос скоро появится.</p>
     {% endif %}
-  </div>
-</section>
-
-{% if featured %}
-<section class="featured" aria-labelledby="featured-title">
-  <div class="wrap featured__grid">
-    <div class="featured__head">
-      <p class="kicker">Сейчас в читалке{% if featured.publication.source_type == 'editorial' %} · Редакционная подборка{% endif %}</p>
-      <h2 class="featured__title" id="featured-title"><a href="{% url 'library:read' featured.publication.slug %}">{{ featured.publication.revision.payload.title_ru }}</a></h2>
-      {% if featured.publication.revision.payload.lead_ru %}<p class="featured__lead">{{ featured.publication.revision.payload.lead_ru }}</p>{% endif %}
-      <p class="meta">
-        {% if featured.publication.thinker %}<a href="{% url 'library:thinker' featured.publication.thinker.slug %}">{{ featured.publication.thinker.name_ru }}</a><span aria-hidden="true"> · </span>{% endif %}{{ featured.outline.part_count|ru_plural:"часть,части,частей" }}<span aria-hidden="true"> · </span>{{ featured.outline.sentence_count|ru_plural:"предложение,предложения,предложений" }}
-      </p>
-      <a class="text-link featured__read" href="{% url 'library:read' featured.publication.slug %}">Открыть текст <span aria-hidden="true">→</span></a>
-    </div>
-    <div class="featured__contents">
-    <p class="kicker">В этом тексте</p>
-    <ol class="toc" aria-label="Содержание материала">
-      {% for part in featured.outline.parts %}
-      <li class="toc__item">
-        <a class="toc__link" href="{% url 'library:read' featured.publication.slug %}#part-{{ part.number }}">
-          <span class="toc__num" aria-hidden="true">{{ part.number|stringformat:"02d" }}</span>
-          <span class="toc__titles">
-            <span class="toc__en" lang="en">{{ part.title_en }}</span>
-            {% if part.title_ru %}<span class="toc__ru">{{ part.title_ru }}</span>{% endif %}
-          </span>
-          <span class="toc__arrow" aria-hidden="true">→</span>
-        </a>
-      </li>
+    {% include 'includes/fork.html' %}
+    {% if start.lines %}
+    <div class="firstlines">
+      <p class="hint">Tap a sentence for Russian.<span class="ru-ui" lang="ru">Перевод — по нажатию на предложение.</span></p>
+      {% for line in start.lines %}
+      <p class="line{% if line.en|length > 64 %} line--long{% endif %}">{% if line.ru %}<span class="s" lang="en" data-gloss="{{ line.id }}"{% if forloop.first %} data-open{% endif %}>{{ line.en }}</span><span class="gloss{% if forloop.first %} is-open{% endif %}" id="{{ line.id }}" lang="ru" role="note">{{ line.ru }}</span>{% else %}<span class="s" lang="en">{{ line.en }}</span>{% endif %}</p>
       {% endfor %}
-    </ol>
+    </div>
+    {% endif %}
+    <div class="cover__foot">
+      {% if start %}<p class="cta"><a class="btn btn--large" href="{{ start.url }}">Start reading</a><span class="ru-ui" lang="ru">Начать чтение</span></p>{% endif %}
+      <p class="tagline"><span lang="en"><span>Big questions in simple English.</span> <span>For adult beginners.</span></span><span class="ru-ui" lang="ru"><span>Большие вопросы на простом английском.</span> <span>Для взрослых начинающих.</span></span></p>
     </div>
   </div>
 </section>
-{% else %}
-<section class="wrap empty-state">
-  <p class="kicker">Библиотека</p>
-  <h2>Первые материалы готовятся</h2>
-  <p>Опубликованных текстов пока нет. Мастерская уже доступна — создайте свой текст ниже.</p>
-</section>
-{% endif %}
+{% endwith %}
 
 {% if others %}
-<section class="more" aria-labelledby="more-title">
+<section class="more" aria-label="More questions">
   <div class="wrap">
-    <h2 class="section-title" id="more-title">Ещё для чтения</h2>
-    <ul class="index-list">
+    {% if others|length > 1 %}<h2 class="more__title">More questions<span class="ru-ui" lang="ru">Ещё вопросы</span></h2>{% endif %}
+    <div class="catalog-list">
       {% for item in others %}
-      <li class="index-list__item">
-        <a class="index-list__link" href="{% url 'library:read' item.publication.slug %}">
-          <span class="index-list__title">{{ item.publication.revision.payload.title_ru }}</span>
-          <span class="index-list__meta">{% if item.publication.thinker %}{{ item.publication.thinker.name_ru }} · {% endif %}{{ item.outline.part_count|ru_plural:"часть,части,частей" }}</span>
-        </a>
-      </li>
+      {% if others|length > 1 %}{% include 'includes/question_card.html' with item=item level=3 %}{% else %}{% include 'includes/question_card.html' with item=item %}{% endif %}
       {% endfor %}
-    </ul>
+    </div>
+  </div>
+</section>
+{% elif start %}
+<section class="soon">
+  <div class="wrap">
+    <p class="soon__text">More questions soon.<span class="ru-ui" lang="ru">Скоро появятся новые вопросы.</span></p>
   </div>
 </section>
 {% endif %}
-
-{% if collections or thinkers %}
-<section class="indexes" aria-label="Подборки и мыслители">
-  <div class="wrap indexes__grid">
-    {% if collections %}
-    <div>
-      <h2 class="section-title">Подборки</h2>
-      <ul class="index-list">
-        {% for c in collections %}
-        <li class="index-list__item">
-          <a class="index-list__link" href="{% url 'library:collection' c.slug %}">
-            <span class="index-list__title">{{ c.title_ru }}</span>
-            {% if c.description_ru %}<span class="index-list__meta">{{ c.description_ru }}</span>{% endif %}
-          </a>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-    {% if thinkers %}
-    <div>
-      <h2 class="section-title">Мыслители</h2>
-      <ul class="index-list">
-        {% for t in thinkers %}
-        <li class="index-list__item">
-          <a class="index-list__link" href="{% url 'library:thinker' t.slug %}">
-            <span class="index-list__title">{{ t.name_ru }}</span>
-            <span class="index-list__meta" lang="en">{{ t.name_en }}</span>
-          </a>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-  </div>
-</section>
-{% endif %}
-
-<section class="workshop" id="workshop" aria-labelledby="workshop-title">
-  <div class="wrap workshop__grid">
-    <div class="workshop__copy">
-      <p class="kicker kicker--night">Мастерская</p>
-      <h2 class="workshop__title" id="workshop-title">От вашего вопроса<br>к новому тексту.</h2>
-      <p class="workshop__lead">Назовите тему или вопрос. Мастерская подготовит серию коротких частей на простом английском с переводом каждого предложения. Любое предложение или часть потом можно поправить.</p>
-      <ul class="facts">
-        <li><strong>{{ costs.generate }}</strong> кредитов — создание серии</li>
-        <li><strong>{{ costs.edit_sentence }}</strong> — правка предложения, <strong>{{ costs.edit_part }}</strong> — правки части</li>
-        <li><strong>{{ welcome }}</strong> кредитов — один раз при регистрации</li>
-      </ul>
-      <p class="workshop__rules"><a href="{% url 'library:credits_help' %}">Как работают кредиты</a></p>
-    </div>
-    <form method="post" action="{% url 'workshop:create_project' %}" class="workshop__form">
-      {% csrf_token %}
-      <input type="hidden" name="mode" value="explain_topic">
-      <label for="topic-input">О какой философской идее вы хотите прочитать?</label>
-      <textarea id="topic-input" name="topic" maxlength="2000" required rows="4" placeholder="Например: объясни концепцию вечного возвращения Ницше"></textarea>
-      <div class="workshop__submit">
-        <button class="btn btn--paper" type="submit">Создать текст</button>
-        {% if not user.is_authenticated %}<p class="workshop__hint">Для создания текста нужен вход. Чтение библиотеки доступно без аккаунта. <a href="{% url 'accounts:login' %}">Войти</a> · <a href="{% url 'accounts:register' %}">Регистрация</a></p>{% endif %}
-      </div>
-      <p class="workshop__note">Загрузка собственных файлов (TXT, MD, PDF) в интерфейсе пока недоступна. Секретные документы загружать нельзя.</p>
-    </form>
-  </div>
-</section>
 {% endblock %}

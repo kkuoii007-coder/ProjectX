@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.conf import settings
-from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
@@ -15,6 +14,7 @@ from apps.credits.models import Wallet, grant_welcome_credits
 from apps.library.models import Favorite, Publication
 from apps.library.templatetags.ui import ru_plural
 from apps.workshop.models import Project, Revision
+from tests.helpers import publish_demo_fixture
 
 
 class Element:
@@ -89,8 +89,7 @@ class RedesignContractsTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        call_command("seed_demo", verbosity=0)
-        cls.publication = Publication.objects.get(slug="socrates-questions")
+        cls.publication = publish_demo_fixture()
         cls.user = User.objects.create_user(login="redesignreader", password=cls.password)
         grant_welcome_credits(cls.user)
         Favorite.objects.create(user=cls.user, publication=cls.publication)
@@ -137,7 +136,6 @@ class RedesignContractsTests(TestCase):
 
     def test_every_post_form_contains_its_own_rendered_csrf_token(self):
         pages = [
-            ("library:home", []),
             ("library:read", [self.publication.slug]),
             ("account:dashboard", []),
             ("account:credits", []),
@@ -154,6 +152,12 @@ class RedesignContractsTests(TestCase):
         for route in ("accounts:login", "accounts:register"):
             with self.subTest(route=route):
                 self.assert_post_forms_have_csrf(guest.get(reverse(route)))
+        # The cover and the library are for reading only: no form posts anything,
+        # for a guest or for a signed-in reader.
+        for client in (self.client, guest):
+            for route in ("library:home", "library:library"):
+                with self.subTest(route=route, guest=client is guest):
+                    self.assertFalse(Markup(client.get(reverse(route))).find("form", method="post"))
 
     def test_nested_workshop_edit_forms_keep_exact_targets_and_fields(self):
         markup = Markup(self.project_response())
@@ -227,6 +231,7 @@ class RedesignContractsTests(TestCase):
         self.assertNotContains(response, "{{")
         self.assertNotContains(response, "{%")
 
+    @override_settings(ASK_ENABLED=True)
     def test_workshop_revision_and_question_forms_keep_actions(self):
         markup = Markup(self.project_response())
         apply_forms = markup.find("form", action=reverse("workshop:apply_head", args=[self.project.pk]))
@@ -285,14 +290,10 @@ class RedesignContractsTests(TestCase):
             ("account:security", [], "Безопасность"),
             ("accounts:login", [], "Вход"),
             ("accounts:register", [], "Регистрация"),
-            ("library:library", [], "Библиотека"),
             ("library:credits_help", [], "Как работают кредиты"),
-            ("library:thinker", [self.publication.thinker.slug], self.publication.thinker.name_ru),
             ("workshop:create_project", [], "Новый проект"),
             ("workshop:project", [self.project.pk], self.project.title),
         ]
-        collection = self.publication.collections.get()
-        routes.append(("library:collection", [collection.slug], collection.title_ru))
         for route, args, title in routes:
             with self.subTest(route=route):
                 response = self.client.get(reverse(route, args=args))
@@ -300,7 +301,34 @@ class RedesignContractsTests(TestCase):
                 markup = Markup(response)
                 self.assertEqual(len(markup.find("h1")), 1)
                 self.assertTrue(markup.find("title")[0].text.startswith(f"{title} · "))
+                # Service pages stay Russian throughout, in the clay tone.
                 self.assertEqual(markup.find("html")[0].attrs.get("lang"), "ru")
+                self.assertEqual(markup.find("body")[0].attrs.get("data-cover"), "clay")
+                self.assertFalse([button for button in markup.find("button") if "data-ru-toggle" in button.attrs])
+
+    def test_reading_path_pages_are_english_with_specific_titles(self):
+        collection = self.publication.collections.get()
+        routes = [
+            ("library:library", [], "Library"),
+            ("library:thinker", [self.publication.thinker.slug], self.publication.thinker.name_en),
+            ("library:collection", [collection.slug], collection.title_ru),
+        ]
+        for route, args, title in routes:
+            with self.subTest(route=route):
+                response = self.client.get(reverse(route, args=args))
+                self.assertEqual(response.status_code, 200)
+                markup = Markup(response)
+                self.assertEqual(len(markup.find("h1")), 1)
+                self.assertTrue(markup.find("title")[0].text.startswith(f"{title} · "))
+                # The reading path: plain English lines, Russian captions marked as Russian.
+                self.assertEqual(markup.find("html")[0].attrs.get("lang"), "en")
+                self.assertEqual(len([button for button in markup.find("button") if "data-ru-toggle" in button.attrs]), 1)
+                captions = markup.find(css_class="ru-ui")
+                self.assertTrue(captions)
+                self.assertTrue(all(caption.attrs.get("lang") == "ru" for caption in captions))
+                # The reading header has no service navigation and no balance.
+                self.assertFalse(markup.find("nav", css_class="site-nav"))
+                self.assertNotContains(response, "balance__value")
 
     def test_tables_are_named_focusable_scroll_regions(self):
         for route, args in [
@@ -336,15 +364,42 @@ class RedesignContractsTests(TestCase):
                 markup = Markup(response)
                 catalog = markup.find("div", css_class="catalog-list")
                 self.assertEqual(len(catalog), 1)
-                card = markup.find("article", css_class="publication-card", within=catalog[0])[0]
+                cards = markup.find("article", css_class="publication-card", within=catalog[0])
+                self.assertEqual(len(cards), 1)
+                card = cards[0]
+                # Each text is a question in its own tone, with one link to the text.
+                self.assertIn(card.attrs.get("data-cover"), ("clay", "sea", "olive"))
                 self.assertIn(self.publication.revision.payload["title_ru"], card.text)
-                self.assertIn(self.publication.revision.payload["lead_ru"], card.text)
-                self.assertIn(self.publication.thinker.name_ru, card.text)
+                self.assertNotIn(self.publication.revision.payload["lead_ru"], card.text)
                 count = len(self.publication.revision.payload["parts"])
-                self.assertIn(ru_plural(count, "часть,части,частей"), card.text)
-                self.assertTrue(markup.find("a", within=card, href=reverse("library:read", args=[self.publication.slug])))
-                self.assertTrue(markup.find("a", within=card, href=reverse("library:thinker", args=[self.publication.thinker.slug])))
+                self.assertIn(f"{count} parts", card.text)
+                self.assertEqual(len(markup.find("a", within=card, href=reverse("library:read", args=[self.publication.slug]))), 1)
+                thinker_links = markup.find("a", within=card, href=reverse("library:thinker", args=[self.publication.thinker.slug]))
+                if route == "library:thinker":
+                    # On the thinker's own page a card does not link back to that page.
+                    self.assertFalse(thinker_links)
+                else:
+                    self.assertEqual(len(thinker_links), 1)
+                    self.assertIn(self.publication.thinker.name_en, card.text)
                 self.assertNotIn("A0", card.text)
+
+    def test_favourite_cards_keep_the_russian_interface_and_the_remove_form(self):
+        response = self.client.get(reverse("account:favorites"))
+        markup = Markup(response)
+        cards = markup.find("article", css_class="publication-card")
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertIn(card.attrs.get("data-cover"), ("clay", "sea", "olive"))
+        self.assertIn(self.publication.revision.payload["title_ru"], card.text)
+        self.assertIn(self.publication.thinker.name_ru, card.text)
+        count = len(self.publication.revision.payload["parts"])
+        self.assertIn(ru_plural(count, "часть,части,частей"), card.text)
+        self.assertEqual(len(markup.find("a", within=card, href=reverse("library:read", args=[self.publication.slug]))), 1)
+        forms = markup.find("form", within=card, method="post")
+        self.assertEqual(len(forms), 1)
+        self.assertEqual(forms[0].attrs.get("action"), reverse("account:favorite_toggle", args=[self.publication.pk]))
+        self.assertEqual(len(markup.find("input", within=forms[0], name="csrfmiddlewaretoken")), 1)
+        self.assertIn("Удалить из избранного", card.text)
 
     def test_search_is_get_only_with_real_reset_and_distinct_empty_states(self):
         response = self.client.get(reverse("library:library"), {"q": "неттакоготекста"})
@@ -354,13 +409,18 @@ class RedesignContractsTests(TestCase):
         self.assertEqual([field.attrs.get("name") for field in markup.find("input", within=form)], ["q"])
         reset = markup.find("a", css_class="search-reset")
         self.assertEqual(reset[0].attrs["href"], reverse("library:library"))
+        self.assertContains(response, "Nothing found.")
         self.assertContains(response, "Ничего не найдено")
-        self.assertNotContains(response, "Первые материалы готовятся")
+        self.assertNotContains(response, "The first question is coming soon.")
         Publication.objects.update(status=Publication.Status.HIDDEN)
         empty = self.client.get(reverse("library:library"))
-        self.assertContains(empty, "Первые материалы готовятся")
+        self.assertContains(empty, "The first question is coming soon.")
+        self.assertContains(empty, "Первый вопрос скоро появится.")
+        self.assertNotContains(empty, "Nothing found.")
         self.assertNotContains(empty, "Ничего не найдено")
         self.assertNotContains(empty, 'class="publication-card"')
+        # With nothing to look through, no search field is offered.
+        self.assertFalse(Markup(empty).find("form", css_class="search-form"))
 
     def test_security_copy_and_password_autocomplete_match_existing_behavior(self):
         response = self.client.get(reverse("account:security"))
@@ -428,7 +488,7 @@ class RedesignContractsTests(TestCase):
 
     def test_credit_help_keeps_full_rules_and_settings_values(self):
         costs = {"generate": 19, "edit_series": 17, "edit_part": 11, "edit_sentence": 7, "ask": 3}
-        with override_settings(WELCOME_CREDITS=47, CREDIT_COSTS=costs):
+        with override_settings(WELCOME_CREDITS=47, CREDIT_COSTS=costs, ASK_ENABLED=True):
             response = self.client.get(reverse("library:credits_help"))
         body = Markup(response).find("article", css_class="prose")[0].text
         for text in [

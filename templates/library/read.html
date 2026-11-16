@@ -1,93 +1,109 @@
-{% extends 'base.html' %}
-{% load ui %}
-{% block title %}{{ publication.revision.payload.title_ru }} — Philosophy Reader{% endblock %}
-{% block description %}{{ publication.revision.payload.lead_ru|default:"Философский текст на простом английском с переводом по нажатию." }}{% endblock %}
+{% extends 'base_reading.html' %}
+{% block title %}{{ title_en }} — Philosophy Reader{% endblock %}
+{% block description %}{{ title_en }} A text in simple English. Tap a sentence for Russian.{% endblock %}
 {% block body_class %}page-reader{% endblock %}
 {% block content %}
-<div class="reading-line" aria-hidden="true"><span class="reading-line__bar" data-reading-line></span></div>
 <article class="reader" data-reader>
-  <header class="reader__head wrap">
-    <p class="crumbs"><a href="{% url 'library:library' %}"><span aria-hidden="true">←</span> Библиотека</a>{% if publication.thinker %}<span aria-hidden="true"> / </span><a href="{% url 'library:thinker' publication.thinker.slug %}">{{ publication.thinker.name_ru }}</a>{% endif %}</p>
-    <h1 class="reader__title">{{ publication.revision.payload.title_ru }}</h1>
-    {% if publication.revision.payload.lead_ru %}<p class="reader__lead">{{ publication.revision.payload.lead_ru }}</p>{% endif %}
-    <p class="meta">
-      {% if publication.source_type == 'editorial' %}Редакционная подборка<span aria-hidden="true"> · </span>{% endif %}{{ outline.part_count|ru_plural:"часть,части,частей" }}<span aria-hidden="true"> · </span>{{ outline.sentence_count|ru_plural:"предложение,предложения,предложений" }}
-    </p>
-    {% if publication.revision.payload.simplification_note_ru %}
-    <p class="editor-note"><strong>Примечание редакции.</strong> {{ publication.revision.payload.simplification_note_ru }}</p>
-    {% endif %}
-    {% if publication.revision.payload.note %}<p class="editor-note">{{ publication.revision.payload.note }}</p>{% endif %}
+  <header class="page-head page-head--reader">
+    <div class="wrap">
+      <h1{% if title_lang == 'ru' %} lang="ru"{% endif %}>{{ title_en }}</h1>
+      {% if title_ru %}<p class="ru-ui" lang="ru">{{ title_ru }}</p>{% endif %}
+      <p class="hint">Tap a sentence for Russian.<span class="ru-ui" lang="ru">Перевод — по нажатию на предложение.</span></p>
+    </div>
+    {% include 'includes/fork.html' %}
   </header>
 
-  <div class="reader__layout wrap">
-    <aside class="reader__rail" aria-label="Навигация по тексту">
-      <nav class="rail" aria-label="Части">
-        <p class="rail__label">Содержание</p>
-        <ol class="rail__list">
-          {% for part in parts %}
-          <li><a class="rail__link" href="#part-{{ part.number }}" data-part-link="part-{{ part.number }}"><span class="rail__num" aria-hidden="true">{{ part.number|stringformat:"02d" }}</span><span lang="en">{{ part.title_en }}</span></a></li>
-          {% endfor %}
-        </ol>
-      </nav>
-      <div class="rail__tools" hidden data-tools>
-        <button class="chip" type="button" data-toggle-all aria-pressed="false">Показать переводы</button>
-      </div>
-      <p class="rail__note">Читайте в своём темпе.<br>Переводы уже готовы.</p>
-    </aside>
-
-    <div class="reader__body">
-      <p class="hint" id="reader-hint"><strong>Перевод по нажатию.</strong> Нажмите на английское предложение или выберите его клавишей Tab и нажмите Enter. Перевод готов заранее и не тратит кредиты.</p>
-      {% for part in parts %}
-      <section class="part" id="part-{{ part.number }}" aria-labelledby="part-{{ part.number }}-title">
-        <header class="part__head">
-          <p class="part__num" aria-hidden="true">{{ part.number|stringformat:"02d" }}</p>
-          <h2 class="part__title" id="part-{{ part.number }}-title" lang="en">{{ part.title_en }}</h2>
-          {% if part.title_ru %}<p class="part__title-ru">{{ part.title_ru }}</p>{% endif %}
-        </header>
-        {% for paragraph in part.paragraphs %}
-        <p class="para" lang="en">{% for s in paragraph %}<span class="s" data-gloss="{{ s.id }}">{{ s.en }}</span><span class="gloss" id="{{ s.id }}" lang="ru" role="note">{{ s.ru }}</span> {% endfor %}</p>
-        {% endfor %}
-      </section>
-      {% empty %}
-      <p class="empty-note">В этом материале пока нет частей для чтения.</p>
+  {% for part in parts %}
+  <section class="part" id="part-{{ part.number }}" aria-labelledby="part-{{ part.number }}-title">
+    <div class="wrap reader__col">
+      <header class="part__head">
+        <h2 class="part__title" id="part-{{ part.number }}-title"><span class="part__num">{{ part.number }}</span>{{ part.title_en }}</h2>
+        {% if part.title_ru %}<p class="ru-ui" lang="ru">{{ part.title_ru }}</p>{% endif %}
+      </header>
+      {% for s in part.sentences %}
+      <p class="line">{% if s.ru %}<span class="s" lang="en" data-gloss="{{ s.id }}">{{ s.en }}</span><span class="gloss" id="{{ s.id }}" lang="ru" role="note">{{ s.ru }}</span>{% else %}<span class="s" lang="en">{{ s.en }}</span>{% endif %}</p>
       {% endfor %}
-
-      {% if terms %}
-      <aside class="terms" aria-labelledby="terms-title">
-        <h2 class="terms__title" id="terms-title">Термины</h2>
-        <dl class="terms__list">
-          {% for term in terms %}
-          <div class="terms__item"><dt lang="en">{{ term.en }}</dt><dd>{{ term.ru }}{% if term.note %}<span class="terms__note" lang="en">{{ term.note }}</span>{% endif %}</dd></div>
-          {% endfor %}
-        </dl>
-      </aside>
-      {% endif %}
-
-      <footer class="reader__foot">
-        {% if user.is_authenticated %}
-        <form method="post" action="{% url 'account:favorite_toggle' publication.pk %}" class="inline">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.path }}">
-          <button class="btn btn--ghost btn--small" type="submit">{% if is_favorite %}Убрать из избранного{% else %}Добавить в избранное{% endif %}</button>
-        </form>
-        <details class="report">
-          <summary>Сообщить о проблеме в тексте</summary>
-          <form method="post" action="{% url 'library:create_report' publication.slug %}" class="report__form">
-            {% csrf_token %}
-            <label for="report-category">Тип проблемы</label>
-            <select id="report-category" name="category" required>
-              {% for value, label in report_categories.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-            </select>
-            <label for="report-details">Что не так?</label>
-            <textarea id="report-details" name="details" rows="3" maxlength="2000" required></textarea>
-            <button class="btn btn--small" type="submit">Отправить жалобу</button>
-          </form>
-        </details>
-        {% else %}
-        <p class="hint"><a href="{% url 'accounts:login' %}">Войдите</a>, чтобы сохранять материалы в избранное и сообщать об ошибках.</p>
-        {% endif %}
-      </footer>
     </div>
+  </section>
+  {% if part.fork %}
+  {# A prepared question, not a test: nothing is sent, saved or scored. #}
+  <section class="choice" data-fork aria-labelledby="{{ part.fork.prompt.id }}-title">
+    {% include 'includes/fork.html' %}
+    <div class="wrap reader__col">
+      <h2 class="choice__title" id="{{ part.fork.prompt.id }}-title">{{ part.fork.title_en|default:"A question for you" }}</h2>
+      <p class="line">{% if part.fork.prompt.ru %}<span class="s" lang="en" data-gloss="{{ part.fork.prompt.id }}">{{ part.fork.prompt.en }}</span><span class="gloss" id="{{ part.fork.prompt.id }}" lang="ru" role="note">{{ part.fork.prompt.ru }}</span>{% else %}<span class="s" lang="en">{{ part.fork.prompt.en }}</span>{% endif %}</p>
+      <div class="choice__buttons" role="group" aria-labelledby="{{ part.fork.prompt.id }}-title" data-fork-buttons hidden>
+        {% for option in part.fork.options %}
+        <button class="choice__btn" type="button" data-fork-choice="{{ option.id }}-line" aria-pressed="false">{{ option.label_en }}<span class="ru-ui" lang="ru">{% if option.key == 'yes' %}Да{% elif option.key == 'no' %}Нет{% else %}Сомневаюсь{% endif %}</span></button>
+        {% endfor %}
+      </div>
+      <div class="choice__options" aria-live="polite">
+        {% for option in part.fork.options %}
+        <div class="choice__option" id="{{ option.id }}-line">
+          <p class="choice__label">{{ option.label_en }}</p>
+          <p class="line">{% if option.ru %}<span class="s" lang="en" data-gloss="{{ option.id }}">{{ option.en }}</span><span class="gloss" id="{{ option.id }}" lang="ru" role="note">{{ option.ru }}</span>{% else %}<span class="s" lang="en">{{ option.en }}</span>{% endif %}</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% if part.fork.next_part %}<p class="choice__next"><a class="btn" href="#part-{{ part.fork.next_part }}">Read on</a><span class="ru-ui" lang="ru">Читать дальше</span></p>{% endif %}
+    </div>
+  </section>
+  {% endif %}
+  {% empty %}
+  <div class="wrap reader__col"><p class="empty-note">This text has no parts yet.<span class="ru-ui" lang="ru">В этом тексте пока нет частей.</span></p></div>
+  {% endfor %}
+
+  <div class="wrap reader__col reader__end">
+    {% if terms %}
+    <section class="end-block terms" aria-labelledby="terms-title">
+      <h2 class="end-block__title" id="terms-title">Words<span class="ru-ui" lang="ru">Слова</span></h2>
+      <dl class="terms__list">
+        {% for term in terms %}
+        <div class="terms__item"><dt>{{ term.en }}</dt><dd><span lang="ru">{{ term.ru }}</span>{% if term.note %}<span class="terms__note">{{ term.note }}</span>{% endif %}</dd></div>
+        {% endfor %}
+      </dl>
+    </section>
+    {% endif %}
+
+    <section class="end-block about" aria-labelledby="about-title">
+      <h2 class="end-block__title" id="about-title">About this text<span class="ru-ui" lang="ru">Об этом тексте</span></h2>
+      {% if about.byline_en or about.source_en %}<p class="about__source">{{ about.byline_en }}{% if about.byline_en and about.source_en %} {% endif %}{% if about.source_en %}Source: {{ about.source_en }}.{% endif %}</p>{% endif %}
+      {% if about.note_ru %}<p class="about__note" lang="ru">{{ about.note_ru }}</p>{% endif %}
+      {% if not about.byline_en and not about.source_en and not about.note_ru %}<p class="about__note">A text in simple English.<span class="ru-ui" lang="ru">Текст на простом английском.</span></p>{% endif %}
+    </section>
+
+    <section class="end-block next" aria-label="What is next">
+      {% if next %}
+      <p class="next__label">Next question<span class="ru-ui" lang="ru">Следующий вопрос</span></p>
+      <p class="next__title"><a href="{{ next.url }}"{% if next.title_lang == 'ru' %} lang="ru"{% endif %}>{{ next.title_en }}</a>{% if next.title_ru %}<span class="ru-ui" lang="ru">{{ next.title_ru }}</span>{% endif %}</p>
+      {% else %}
+      <p class="next__soon">Next question soon.<span class="ru-ui" lang="ru">Следующий вопрос скоро появится.</span></p>
+      {% endif %}
+      {% if contact_email %}<p class="contact"><a href="mailto:{{ contact_email }}">Write to us</a><span class="ru-ui" lang="ru">Напишите нам</span></p>{% endif %}
+    </section>
+
+    {% if user.is_authenticated %}
+    <section class="end-block reader-tools" lang="ru" aria-label="Действия с текстом">
+      <form method="post" action="{% url 'account:favorite_toggle' publication.pk %}" class="inline">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <button class="btn btn--ghost btn--small" type="submit">{% if is_favorite %}Убрать из избранного{% else %}Добавить в избранное{% endif %}</button>
+      </form>
+      <details class="report">
+        <summary>Сообщить о проблеме в тексте</summary>
+        <form method="post" action="{% url 'library:create_report' publication.slug %}" class="report__form">
+          {% csrf_token %}
+          <label for="report-category">Тип проблемы</label>
+          <select id="report-category" name="category" required>
+            {% for value, label in report_categories.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          </select>
+          <label for="report-details">Что не так?</label>
+          <textarea id="report-details" name="details" rows="3" maxlength="2000" required></textarea>
+          <button class="btn btn--small" type="submit">Отправить жалобу</button>
+        </form>
+      </details>
+    </section>
+    {% endif %}
   </div>
 </article>
 {% endblock %}

@@ -1,11 +1,16 @@
 {% extends 'base.html' %}
 {% block title %}{{ project.title }} · Мастерская · Philosophy Reader{% endblock %}
 {% block content %}
-<section class="workshop-page">
+<header class="page-head page-head--compact">
   <div class="wrap">
-    <p class="kicker kicker--night">Мастерская</p>
+    <p class="kicker">Мастерская</p>
     <h1>{{ project.title }}</h1>
-    <p class="workshop-back"><a href="{% url 'account:dashboard' %}">Вернуться в кабинет</a></p>
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<section class="workshop-page">
+  <div class="wrap page-body">
+    <p class="workshop-back"><a class="tap" href="{% url 'account:dashboard' %}">Вернуться в кабинет</a></p>
     {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
     {% if revision %}
     <article class="workshop-reading">
@@ -28,8 +33,7 @@
         </details>
         {% for s in part.sentences %}
         <div class="workshop-sentence">
-          <span class="s" lang="en"
-            data-gloss="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.en }}</span>
+          <span class="s" lang="en" data-gloss="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.en }}</span>
           <span class="gloss" role="note" lang="ru" id="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.ru }}</span>
           <details class="workshop-edit">
             <summary>Изменить предложение</summary>
@@ -57,6 +61,7 @@
 <div class="wrap">
   <section class="section-gap">
     <h2 class="section-title">Версии</h2>
+    <p class="table-scroll__hint">Таблицу можно листать вбок.</p>
     <div class="table-scroll" tabindex="0" role="region" aria-label="Версии текста и действия с ними">
       <table>
         <thead>
@@ -72,7 +77,7 @@
             <td>{{ r.created_at|date:"d.m.Y H:i" }}</td>
             <td><code>{{ r.content_hash|truncatechars:12 }}</code>{% if project.head_revision_id == r.pk %} (текущая){% endif %}</td>
             <td>
-              <a href="{% url 'workshop:revision_diff' project.pk r.pk %}">Сравнить</a>
+              <a class="tap" href="{% url 'workshop:revision_diff' project.pk r.pk %}">Сравнить</a>
               {% if project.head_revision_id != r.pk %}
               <form method="post" action="{% url 'workshop:apply_head' project.pk %}" class="inline">
                 {% csrf_token %}
@@ -100,6 +105,7 @@
     {% empty %}
     <p class="meta">Вопросов по этому тексту ещё не было.</p>
     {% endfor %}
+    {% if ask_enabled %}
     <form method="post" action="{% url 'workshop:ask' project.pk %}">
       {% csrf_token %}
       <label for="instruction">Вопрос по тексту</label>
@@ -107,6 +113,10 @@
       <input type="hidden" name="idempotency_key" value="">
       <button type="submit">Спросить</button>
     </form>
+    {% else %}
+    <p class="ask-off" lang="en">Questions are not ready yet. You can still read your text.</p>
+    <p class="ask-off__ru meta">Вопросы по тексту пока не работают. Текст можно читать как прежде.</p>
+    {% endif %}
   </section>
 </div>
 {% endblock %}
