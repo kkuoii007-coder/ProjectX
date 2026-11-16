@@ -32,7 +32,9 @@ Unique(slug, version).
 не переписывает историю проверок. RAG не заменяет редакционную карточку.
 
 Publication: slug unique, revision, quality_report, source_type editorial,
-status published/hidden/withdrawn, published_at, published_by nullable.
+status published/hidden/withdrawn, published_at, published_by nullable,
+cover_tone clay/sea/olive (только оформление; задаётся полем cover в файле
+текста вне payload, не входит в хеш ревизии и не требует новой проверки).
 Публичный текст — ссылка на неизменяемую ревизию, а не на project.head.
 quality_report фиксирует отчёт, на основании которого администратор опубликовал
 снимок; права на источники сервер повторно проверяет в момент публикации.

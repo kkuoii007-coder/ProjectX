@@ -50,6 +50,8 @@
 | RETRIEVAL_MAX_INPUT_TOKENS | серверный cap выбранной модели |
 | COMMUNITY_ENABLED | false; следующий этап |
 | ASK_ENABLED | false; вопрос по тексту выключен до исправления |
+| START_READING_SLUG | what-does-it-mean-to-be-brave; текст на обложке главной |
+| CONTACT_EMAIL | адрес ссылки «Write to us» в конце текста |
 | REPORTS_PER_USER_PER_DAY | 3 |
 | LOGIN_ATTEMPTS_PER_ACCOUNT_15_MIN | 10 |
 | LOGIN_ATTEMPTS_PER_NETWORK_15_MIN | 30 |
