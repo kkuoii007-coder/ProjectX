@@ -86,6 +86,8 @@ publication_eligibility: ineligible/eligible вычисляется по акт�
 
 Payload: заголовки, упорядоченные части, пары предложений en/ru,
 термины, русское пояснение упрощений. Порядок — явное поле.
+У части редакционного текста допускается необязательная развилка fork (вопрос
+читателю и три подготовленных ответа); она входит в content_hash.
 EvidenceLink: revision, part/sentence locator, kind claim_support/source_alignment,
 claim_text nullable, citation_id, fact_id nullable, source_chunk nullable,
 locator_json, support_type quotation/paraphrase/interpretation.
@@ -109,7 +111,8 @@ input_json, input_hash, idempotency_key, status, stage, outcome nullable,
 reserved_credits, policy_version, lease_until, lease_token, result_reference,
 error_code, timestamps. Unique(owner, idempotency_key).
 kind: generate/edit_series/edit_part/edit_sentence/ask/import_source/index_source/
-search_sources.
+search_sources/review. review — живая проверка существующей ревизии без генерации,
+repair и пользовательских кредитов (reserved_credits=0).
 outcome: delivered/needs_clarification/refused/needs_broader_edit/no_charge_failure.
 status=succeeded означает завершение и доставку результата, не обязательно списание.
 no_charge_failure допустим только с сохранённым бесплатным объяснением; необработанная

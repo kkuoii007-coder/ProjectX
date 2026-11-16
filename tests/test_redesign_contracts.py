@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.conf import settings
-from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
@@ -15,6 +14,7 @@ from apps.credits.models import Wallet, grant_welcome_credits
 from apps.library.models import Favorite, Publication
 from apps.library.templatetags.ui import ru_plural
 from apps.workshop.models import Project, Revision
+from tests.helpers import publish_demo_fixture
 
 
 class Element:
@@ -89,8 +89,7 @@ class RedesignContractsTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        call_command("seed_demo", verbosity=0)
-        cls.publication = Publication.objects.get(slug="socrates-questions")
+        cls.publication = publish_demo_fixture()
         cls.user = User.objects.create_user(login="redesignreader", password=cls.password)
         grant_welcome_credits(cls.user)
         Favorite.objects.create(user=cls.user, publication=cls.publication)
@@ -227,6 +226,7 @@ class RedesignContractsTests(TestCase):
         self.assertNotContains(response, "{{")
         self.assertNotContains(response, "{%")
 
+    @override_settings(ASK_ENABLED=True)
     def test_workshop_revision_and_question_forms_keep_actions(self):
         markup = Markup(self.project_response())
         apply_forms = markup.find("form", action=reverse("workshop:apply_head", args=[self.project.pk]))
@@ -428,7 +428,7 @@ class RedesignContractsTests(TestCase):
 
     def test_credit_help_keeps_full_rules_and_settings_values(self):
         costs = {"generate": 19, "edit_series": 17, "edit_part": 11, "edit_sentence": 7, "ask": 3}
-        with override_settings(WELCOME_CREDITS=47, CREDIT_COSTS=costs):
+        with override_settings(WELCOME_CREDITS=47, CREDIT_COSTS=costs, ASK_ENABLED=True):
             response = self.client.get(reverse("library:credits_help"))
         body = Markup(response).find("article", css_class="prose")[0].text
         for text in [

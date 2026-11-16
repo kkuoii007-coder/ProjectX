@@ -100,6 +100,7 @@
     {% empty %}
     <p class="meta">Вопросов по этому тексту ещё не было.</p>
     {% endfor %}
+    {% if ask_enabled %}
     <form method="post" action="{% url 'workshop:ask' project.pk %}">
       {% csrf_token %}
       <label for="instruction">Вопрос по тексту</label>
@@ -107,6 +108,10 @@
       <input type="hidden" name="idempotency_key" value="">
       <button type="submit">Спросить</button>
     </form>
+    {% else %}
+    <p class="ask-off" lang="en">Questions are not ready yet. You can still read your text.</p>
+    <p class="ask-off__ru meta">Вопросы по тексту пока не работают. Текст можно читать как прежде.</p>
+    {% endif %}
   </section>
 </div>
 {% endblock %}

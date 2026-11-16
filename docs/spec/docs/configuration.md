@@ -49,11 +49,16 @@
 | RETRIEVAL_MAX_CHUNKS | 8 |
 | RETRIEVAL_MAX_INPUT_TOKENS | серверный cap выбранной модели |
 | COMMUNITY_ENABLED | false; следующий этап |
+| ASK_ENABLED | false; вопрос по тексту выключен до исправления |
 | REPORTS_PER_USER_PER_DAY | 3 |
 | LOGIN_ATTEMPTS_PER_ACCOUNT_15_MIN | 10 |
 | LOGIN_ATTEMPTS_PER_NETWORK_15_MIN | 30 |
 | REGISTRATIONS_PER_NETWORK_PER_DAY | 3 |
 | REGISTRATIONS_GLOBAL_PER_DAY | 50 |
+
+При ASK_ENABLED=false запрос «Спросить» отклоняется до создания задачи и резерва,
+в том числе при прямой отправке формы; вместо формы показана строка
+«Questions are not ready yet. You can still read your text.»
 
 COMMUNITY_ENABLED зарезервирован для следующего этапа и не включает сообщество
 в MVP. Пороги голосования хранятся как defaults в voting-and-publication.md,

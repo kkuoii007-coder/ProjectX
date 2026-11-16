@@ -1,0 +1,239 @@
+{
+  "schema": "editorial-text-1",
+  "slug": "what-does-it-mean-to-be-brave",
+  "knowledge_cards": [
+    {
+      "slug": "plato-laches-courage",
+      "version": 1
+    }
+  ],
+  "payload": {
+    "title_en": "What does it mean to be brave?",
+    "title_ru": "Что значит быть смелым?",
+    "parts": [
+      {
+        "title_en": "An easy answer",
+        "sentences": [
+          {
+            "en": "Two men talk in Athens.",
+            "ru": "Двое мужчин беседуют в Афинах."
+          },
+          {
+            "en": "Their names are Socrates and Laches.",
+            "ru": "Их зовут Сократ и Лахет."
+          },
+          {
+            "en": "Laches is a soldier.",
+            "ru": "Лахет — воин."
+          },
+          {
+            "en": "He knows war well.",
+            "ru": "Он хорошо знает войну."
+          },
+          {
+            "en": "Socrates asks him a question.",
+            "ru": "Сократ задаёт ему вопрос."
+          },
+          {
+            "en": "“What does it mean to be brave?”",
+            "ru": "«Что значит быть смелым?»"
+          },
+          {
+            "en": "Laches thinks the answer is easy.",
+            "ru": "Лахет думает, что ответ простой."
+          },
+          {
+            "en": "He says: “A brave man stays in his place.",
+            "ru": "Он говорит: «Смелый человек остаётся на своём месте."
+          },
+          {
+            "en": "He fights.",
+            "ru": "Он сражается."
+          },
+          {
+            "en": "He does not run away.”",
+            "ru": "Он не убегает»."
+          }
+        ],
+        "fork": {
+          "title_en": "Before you read on",
+          "prompt": {
+            "en": "Some soldiers run away first. Then they turn back, fight, and win. Are they brave?",
+            "ru": "Некоторые воины сначала убегают. Потом поворачивают назад, сражаются и побеждают. Они смелые?"
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label_en": "Yes",
+              "en": "You say yes. Then the first answer has a problem. Read on.",
+              "ru": "Вы говорите «да». Тогда с первым ответом возникает трудность. Читайте дальше."
+            },
+            {
+              "key": "no",
+              "label_en": "No",
+              "en": "You say no. This is like Laches's first answer. Read on.",
+              "ru": "Вы говорите «нет». Это похоже на первый ответ Лахета. Читайте дальше."
+            },
+            {
+              "key": "not_sure",
+              "label_en": "Not sure",
+              "en": "It is a hard question. Read on and see.",
+              "ru": "Это трудный вопрос. Читайте дальше и увидите."
+            }
+          ]
+        }
+      },
+      {
+        "title_en": "A hard case",
+        "sentences": [
+          {
+            "en": "Socrates says: “Yes, this man is brave.",
+            "ru": "Сократ говорит: «Да, такой человек смел."
+          },
+          {
+            "en": "But I have a new question.”",
+            "ru": "Но у меня есть новый вопрос»."
+          },
+          {
+            "en": "He tells Laches about an old war.",
+            "ru": "Он рассказывает Лахету об одной давней войне."
+          },
+          {
+            "en": "In this war, some soldiers run away first.",
+            "ru": "В этой войне некоторые воины сначала убегают."
+          },
+          {
+            "en": "Then they turn back and fight.",
+            "ru": "Потом они поворачивают назад и сражаются."
+          },
+          {
+            "en": "And they win.",
+            "ru": "И побеждают."
+          },
+          {
+            "en": "Laches says: “That is true.”",
+            "ru": "Лахет говорит: «Это правда»."
+          },
+          {
+            "en": "Socrates says: “These men are brave too.”",
+            "ru": "Сократ говорит: «Эти люди тоже смелые»."
+          },
+          {
+            "en": "Laches agrees.",
+            "ru": "Лахет соглашается."
+          },
+          {
+            "en": "Now there is a problem.",
+            "ru": "И тут возникает трудность."
+          },
+          {
+            "en": "The first answer says: a brave man does not run away.",
+            "ru": "Первый ответ говорит: смелый человек не убегает."
+          },
+          {
+            "en": "But these men run away, and they are brave.",
+            "ru": "Но эти люди убегают, и они смелые."
+          }
+        ]
+      },
+      {
+        "title_en": "A bigger question",
+        "sentences": [
+          {
+            "en": "Socrates does not say: “You are wrong.”",
+            "ru": "Сократ не говорит: «Ты неправ»."
+          },
+          {
+            "en": "He says: “My question was not good.",
+            "ru": "Он говорит: «Мой вопрос был нехорош."
+          },
+          {
+            "en": "People are brave in war.",
+            "ru": "Люди бывают смелыми на войне."
+          },
+          {
+            "en": "But people are brave in other places too.",
+            "ru": "Но люди бывают смелыми и в других местах."
+          },
+          {
+            "en": "Some are brave at sea.",
+            "ru": "Одни смелы на море."
+          },
+          {
+            "en": "Some are brave when they are sick.",
+            "ru": "Другие смелы в болезни."
+          },
+          {
+            "en": "Some are brave when they are poor.”",
+            "ru": "Третьи смелы в бедности»."
+          },
+          {
+            "en": "Laches agrees again.",
+            "ru": "Лахет снова соглашается."
+          },
+          {
+            "en": "So Socrates asks: “What is the same in all these people?”",
+            "ru": "Тогда Сократ спрашивает: «Что общего у всех этих людей?»"
+          },
+          {
+            "en": "Laches gives a new answer.",
+            "ru": "Лахет даёт новый ответ."
+          },
+          {
+            "en": "This time it is not easy.",
+            "ru": "На этот раз это нелегко."
+          },
+          {
+            "en": "The men talk for a long time.",
+            "ru": "Они говорят долго."
+          }
+        ]
+      },
+      {
+        "title_en": "No answer yet",
+        "sentences": [
+          {
+            "en": "In the end, Socrates says: “We have no answer.”",
+            "ru": "В конце концов Сократ говорит: «Ответа у нас нет»."
+          },
+          {
+            "en": "But now they know one thing.",
+            "ru": "Но теперь они знают одно."
+          },
+          {
+            "en": "The first answer was not the full answer.",
+            "ru": "Первый ответ был неполным."
+          },
+          {
+            "en": "When is it brave to stay?",
+            "ru": "Когда смелость — остаться?"
+          },
+          {
+            "en": "When is it brave to go?",
+            "ru": "А когда — уйти?"
+          }
+        ]
+      }
+    ],
+    "glossary": [
+      {
+        "term_en": "brave",
+        "explanation_en": "A brave person is not afraid to do hard things.",
+        "translation_ru": "смелый"
+      },
+      {
+        "term_en": "soldier",
+        "explanation_en": "A person who fights in a war.",
+        "translation_ru": "воин, солдат"
+      },
+      {
+        "term_en": "fight",
+        "explanation_en": "People fight when they want to hurt each other.",
+        "translation_ru": "сражаться, драться"
+      }
+    ],
+    "source_en": "Plato, Laches",
+    "simplification_note_ru": "Платон, «Лахет», разделы 190e–192c и 199e. Это пересказ, а не цитаты. Упрощения: в диалоге участвуют ещё несколько человек; Лахет был полководцем, в тексте он soldier; фразы о трудности первого ответа принадлежат составителю.",
+    "authorship": "ai"
+  }
+}

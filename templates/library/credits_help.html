@@ -15,7 +15,7 @@
             <li>Перегенерация серии: <strong>{{ costs.edit_series }}</strong></li>
             <li>Правка части: <strong>{{ costs.edit_part }}</strong></li>
             <li>Правка предложения: <strong>{{ costs.edit_sentence }}</strong></li>
-            <li>Вопрос: <strong>{{ costs.ask }}</strong></li>
+            {% if ask_enabled %}<li>Вопрос: <strong>{{ costs.ask }}</strong></li>{% endif %}
             <li>Чтение и готовый перевод: <strong>0</strong></li>
         </ul>
     </section>

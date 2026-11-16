@@ -10,6 +10,7 @@ class RevisionAdmin(RevisionPublicationActionMixin, admin.ModelAdmin):
     list_display = ("id", "project", "created_at", "content_hash")
     list_filter = ("project__mode",)
     readonly_fields = [f.name for f in Revision._meta.fields]
+    actions = ["review_revision_action", "publish_revision_action"]
 
 
 admin.site.register(Project)

@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
@@ -46,26 +47,28 @@ def create_project(request):
 @login_required
 def project_detail(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
-    messages = Message.objects.filter(project=project, owner=request.user).select_related("job")
+    return render(request, "workshop/project.html", _project_context(request, project))
+
+
+def _project_context(request, project):
     revision = project.head_revision
-    revisions = project.revisions.order_by("-created_at")[:20]
-    return render(
-        request,
-        "workshop/project.html",
-        {
-            "project": project,
-            "messages_list": messages,
-            "revision": revision,
-            "revisions": revisions,
-            "parts": revision.payload.get("parts", []) if revision else [],
-        },
-    )
+    return {
+        "project": project,
+        "messages_list": Message.objects.filter(project=project, owner=request.user).select_related("job"),
+        "revision": revision,
+        "revisions": project.revisions.order_by("-created_at")[:20],
+        "parts": revision.payload.get("parts", []) if revision else [],
+    }
 
 
 @require_POST
 @login_required
 def ask(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
+    if not settings.ASK_ENABLED:
+        # Switched off: a direct POST gets the same page with the text and
+        # no job, reservation or message is created.
+        return render(request, "workshop/project.html", _project_context(request, project), status=403)
     instruction = request.POST.get("instruction", "").strip()
     if not instruction or len(instruction) > 2000:
         return render(request, "workshop/project.html", {"project": project, "error": "Введите вопрос до 2000 символов"}, status=400)

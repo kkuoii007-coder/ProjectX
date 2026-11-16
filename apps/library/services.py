@@ -9,8 +9,11 @@ bypasses community voting for community publications (none exist in MVP).
 
 import json
 
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_slug
 from django.db import transaction
 from django.utils import timezone
+from django.utils.text import slugify
 
 from apps.ai.models import QualityReport
 from apps.operations.models import AuditEvent
@@ -25,16 +28,50 @@ class PublicationBlocked(Exception):
         self.reasons = [message]
 
 
+def publication_slug(revision, preferred=None):
+    """Address for a revision's publication.
+
+    Built from the English title with punctuation removed ("What does it
+    mean to be brave?" -> what-does-it-mean-to-be-brave), so the reader URL
+    always resolves. An earlier publication of the same project keeps its
+    address; a slug taken by another text gets a numeric suffix.
+    """
+    earlier = Publication.objects.filter(revision__project=revision.project).order_by("-published_at").first()
+    if earlier is not None:
+        return earlier.slug
+    limit = Publication._meta.get_field("slug").max_length
+    base = slugify(preferred or revision.payload.get("title_en") or "")[:limit].strip("-") or f"text-{revision.pk}"
+    slug, number = base, 2
+    while Publication.objects.filter(slug=slug).exists():
+        suffix = f"-{number}"
+        slug = base[: limit - len(suffix)].rstrip("-") + suffix
+        number += 1
+    return slug
+
+
 def publish_revision(*, revision, admin, slug, thinker=None, reason=""):
     """Create an editorial Publication after full server-side gating.
 
     Returns (publication, created). A repeat of the same revision returns
-    the existing publication without a duplicate (idempotent action).
+    the existing publication without a duplicate (idempotent action). A
+    newer revision of an already published text replaces the old one under
+    the same address, after passing the same gate.
     """
     existing = Publication.objects.filter(revision=revision).first()
-    if existing is not None:
+    if existing is not None and existing.status == Publication.Status.PUBLISHED:
         return existing, False
     reasons = []
+    # 0. The address must be a real slug: anything else breaks every page
+    # that links to the text. It may only be reused by the same text.
+    try:
+        validate_slug(slug)
+    except ValidationError:
+        raise PublicationBlocked("invalid_slug", f"Недопустимый адрес публикации: {slug!r}")
+    if len(slug) > Publication._meta.get_field("slug").max_length:
+        raise PublicationBlocked("invalid_slug", "Адрес публикации слишком длинный")
+    previous = Publication.objects.select_related("revision").filter(slug=slug).first()
+    if previous is not None and previous.revision.project_id != revision.project_id:
+        raise PublicationBlocked("slug_taken", f"Адрес {slug} занят другим текстом")
     # 1. A quality report bound to the *current* content hash of this revision.
     report = QualityReport.objects.filter(
         revision=revision, revision_content_hash=revision.content_hash
@@ -60,6 +97,16 @@ def publish_revision(*, revision, admin, slug, thinker=None, reason=""):
         ]
         if blocking:
             reasons.append("В отчёте есть блокирующие замечания reviewer")
+        # A recorded verdict other than pass never publishes.
+        if review.get("verdict") and review.get("verdict") != "pass":
+            reasons.append(f"verdict={review.get('verdict')} не допускает публикацию")
+        # The report names the card versions the reviewer saw. If the
+        # verified cards of the revision differ now, the report is stale.
+        if report.card_versions_json:
+            from .editorial import card_version_records
+
+            if _card_key(report.card_versions_json) != _card_key(card_version_records(revision)):
+                reasons.append("Карточки знаний изменились после проверки: нужна новая проверка")
     # 4. Source rights: every linked source document must be usable
     # (editorial corpus or rights_state allowed); unknown rights block.
     from apps.sources.models import SourceDocument
@@ -71,6 +118,12 @@ def publish_revision(*, revision, admin, slug, thinker=None, reason=""):
                 reasons.append(f"Права на источник {document.pk} не подтверждены (rights_state=unknown)")
     if reasons:
         raise PublicationBlocked("publication_blocked", "; ".join(reasons))
+
+    # A withdrawn publication of this revision, or an earlier revision of
+    # the same text under this address, is restored/replaced in place.
+    target = existing or previous
+    if target is not None:
+        return _republish(target, revision=revision, report=report, admin=admin, reason=reason), True
 
     with transaction.atomic():
         publication = Publication.objects.create(
@@ -95,6 +148,40 @@ def publish_revision(*, revision, admin, slug, thinker=None, reason=""):
             },
         )
     return publication, True
+
+
+def _card_key(records):
+    return sorted(
+        (str(r.get("slug")), r.get("version"), str(r.get("content_hash")))
+        for r in records
+        if isinstance(r, dict)
+    )
+
+
+def _republish(publication, *, revision, report, admin, reason):
+    """Point an existing publication at a newer, freshly gated revision of
+    the same text. The address, favourites and reports stay with it."""
+    with transaction.atomic():
+        old_hash = publication.revision.content_hash
+        publication.revision = revision
+        publication.quality_report = report
+        publication.status = Publication.Status.PUBLISHED
+        publication.published_at = timezone.now()
+        publication.published_by = admin
+        publication.save(update_fields=["revision", "quality_report", "status", "published_at", "published_by"])
+        AuditEvent.objects.create(
+            actor_reference=f"admin:{admin.pk}",
+            action="editorial_republish",
+            object_reference=f"revision:{revision.pk}",
+            reason=reason[:255] or "Новая проверенная версия текста",
+            sanitized_metadata={
+                "publication_slug": publication.slug,
+                "previous_revision_hash": old_hash,
+                "revision_hash": revision.content_hash,
+                "quality_report": str(report.pk),
+            },
+        )
+    return publication
 
 
 def retract_publication(*, publication, admin, reason):

@@ -111,6 +111,47 @@ Django 5.2 LTS · Python 3.12 · PostgreSQL 16 + pgvector · серверные 
   `purge_user_data --login --reason` (отказ для активного staff).
 - HTTP-удаление аккаунта (`POST /account/delete/`) выполняет purge немедленно.
 
+## Готовый текст: подача, проверка, публикация (16 ноября 2026)
+
+Готовый текст попадает в библиотеку без генерации и без правок:
+
+1. Текст — файл `content/texts/<slug>.json` (schema `editorial-text-1`), карточка
+   знаний — `content/cards/<slug>-v<N>.json` (schema `knowledge-card-1`).
+2. `submit_text` сохраняет payload как неизменяемую ревизию служебного проекта
+   `editorial`. Повтор не создаёт дубликат; любое изменение файла даёт новую
+   ревизию без отчёта качества.
+3. `review_text` ставит задачу `review`: один вызов `AI_REVIEW_MODEL` с текстом и
+   проверенной карточкой (промпт review-v3). Ремонта нет, текст не меняется,
+   пользовательские кредиты не трогаются, расход идёт в бюджет владельца.
+   Отчёт `QualityReport` создаёт только воркер по ответу живой модели.
+4. `publish_text` вызывает прежнюю проверку `publish_revision`. Она отклоняет
+   ревизию без отчёта для текущего хеша, без проверенной карточки, с блокирующим
+   замечанием, с verdict не pass, с отчётом по другой версии карточки и с адресом,
+   который не является slug. Создать `Publication` вручную в admin нельзя.
+
+Те же действия есть в admin ревизий: «Проверить ревизию» и «Редакционная
+публикация выбранной ревизии»; в admin публикаций — «Снять с публикации».
+
+Первый текст: `content/texts/what-does-it-mean-to-be-brave.json`. Его payload
+закреплён хешем в `tests/test_editorial_path.py`: случайная правка файла ломает тест.
+
+На сервере после обновления кода (выполняет владелец или тот, кому он разрешил;
+окружение — как у сервисов, `/etc/philosophy-reader/service.env`):
+
+```bash
+venv/bin/python manage.py migrate
+venv/bin/python manage.py collectstatic --noinput
+sudo systemctl restart philosophy-reader-web philosophy-reader-worker
+venv/bin/python manage.py submit_text content/texts/what-does-it-mean-to-be-brave.json
+venv/bin/python manage.py review_text content/texts/what-does-it-mean-to-be-brave.json   # один платный вызов
+venv/bin/python manage.py publish_text content/texts/what-does-it-mean-to-be-brave.json --admin <логин>
+venv/bin/python manage.py withdraw_publication socrates-questions --admin <логин>
+```
+
+Для проверки моделью Sonnet 5.5 в `service.env` должно быть
+`AI_REVIEW_MODEL=anthropic/claude-sonnet-5.5`. Читалка с развилкой появляется на
+этапе F; до него опубликованный текст показывается без развилки.
+
 ## Требования
 
 - Ubuntu 24.04, Python 3.12, PostgreSQL 16 с расширением `vector`.
@@ -244,7 +285,11 @@ venv/bin/python manage.py check
 |---|---|
 | `migrate` | Миграции |
 | `createsuperuser` | Администратор (логин/пароль, без email) |
-| `seed_demo` | Реальный демо-материал en/ru (Сократ/Платон) |
+| `seed_demo` | Демо-черновик en/ru (Сократ) для локальной разработки; ничего не публикует |
+| `submit_text` | Подать готовый текст без изменений: `content/texts/<slug>.json` (вместе с карточкой из `content/cards/`) |
+| `review_text` | Живая проверка поданного текста: один платный вызов, замечания по-русски; `--inline` — без воркера |
+| `publish_text` | Публикация через `publish_revision`: `<файл> --admin <логин>` |
+| `withdraw_publication` | Снять с публикации: `<slug> --admin <логин> [--reason]` |
 | `run_ai_worker --once` | Обработать одну задачу из очереди |
 | `run_maintenance` | Зависшие задачи и резервы |
 | `issue_credits` | Ручное пополнение: `--login --amount --operation-key --reason` (идемпотентно, только при `TOPUP_MODE=manual_test`) |
@@ -268,9 +313,11 @@ venv/bin/python manage.py check
   поисковый API) ещё не подключён — DocumentFetcher готов и покрыт тестами.
 - FTS сконфигурирован на 'english'; для русских запросов работает векторная
   нога и морфология PostgreSQL отсутствует (приемлемо для en-корпуса MVP).
-- Editorial-публикация в seed_demo создаётся напрямую (сидирование, мимо
-  гейтов publish_revision); retrieve-сценарий simplify_source в edit-потоке
-  не покрыт end-to-end.
+- `seed_demo` больше ничего не публикует; retrieve-сценарий simplify_source
+  в edit-потоке не покрыт end-to-end.
+- Вопрос по тексту выключен (`ASK_ENABLED=false`): живой путь сохраняет пустой
+  ответ и списывает кредит. Дефект не исправлен, он зафиксирован тестом
+  `tests/test_ask_switch.py` (expectedFailure).
 - nginx/HTTPS/публичный доступ не настроены (loopback only) — отдельный
   согласованный шаг после правового и платёжного контура.
 - Визуальная проверка редизайна «глазами» (скриншоты сняты, не просмотрены),

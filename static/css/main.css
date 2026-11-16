@@ -1854,6 +1854,8 @@ th {
 .discourse .message { margin-block: var(--s-4); }
 .discourse .message p:last-child { margin-bottom: 0; }
 .discourse button { margin-top: var(--s-3); }
+.ask-off { margin: var(--s-5) 0 var(--s-1); font-weight: 600; }
+.ask-off__ru { margin: 0; }
 .workshop__form button[type="submit"] { background: var(--paper); border-color: var(--paper); color: var(--ink); }
 .workshop__form button[type="submit"]:hover { background: var(--night-rubric); border-color: var(--night-rubric); }
 

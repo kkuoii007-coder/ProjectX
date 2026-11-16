@@ -1,0 +1,41 @@
+{
+  "schema": "knowledge-card-1",
+  "slug": "plato-laches-courage",
+  "version": 1,
+  "title": "Plato, Laches: the first definition of courage (190d–192c, 199e)",
+  "sources": [
+    {
+      "title": "Plato, Laches. English translation by W. R. M. Lamb (Loeb Classical Library), Perseus Digital Library",
+      "url": "https://scaife.perseus.org/reader/urn:cts:greekLit:tlg0059.tlg019.perseus-eng2:190e/",
+      "sections": "190d–192d, 199e–201c"
+    }
+  ],
+  "facts": [
+    {"fact_id": "laches-question", "locator": "190d–e", "support_type": "paraphrase", "text": "Socrates asks Laches to say what courage is."},
+    {"fact_id": "laches-first-answer", "locator": "190e", "support_type": "paraphrase", "text": "Laches replies that this is not difficult: a man who is willing to stay at his post, face the enemy and not run away is courageous."},
+    {"fact_id": "laches-staying-is-brave", "locator": "191a", "support_type": "paraphrase", "text": "Socrates and Laches agree that the man who stays at his post and fights the enemy is courageous."},
+    {"fact_id": "laches-fleeing-question", "locator": "191a", "support_type": "paraphrase", "text": "Socrates then asks about another kind of man, who fights the enemy while fleeing and not staying."},
+    {"fact_id": "laches-plataea", "locator": "191b–c", "support_type": "paraphrase", "text": "Socrates gives the example of the Spartans at Plataea: they are said to have fled first, then turned round and fought, and so won the battle. Laches answers that this is true."},
+    {"fact_id": "laches-question-to-blame", "locator": "190e, 191c", "support_type": "paraphrase", "text": "Socrates says that he himself is to blame for the answer, because he put his question badly."},
+    {"fact_id": "laches-many-kinds", "locator": "191d–e", "support_type": "paraphrase", "text": "Socrates says he wanted to ask about courage not only in war but also in perils at sea, in disease, in poverty and in public affairs, whether people stand their ground or turn back upon the enemy. Laches agrees that there are courageous people in all these kinds."},
+    {"fact_id": "laches-same-in-all", "locator": "191e", "support_type": "paraphrase", "text": "Socrates asks what courage is, the thing that is the same in all these cases."},
+    {"fact_id": "laches-second-answer", "locator": "192a–c", "support_type": "paraphrase", "text": "Laches does not understand at once; after the example of quickness he gives a second answer: courage is a certain endurance of the soul. The discussion then continues."},
+    {"fact_id": "laches-no-answer", "locator": "199e", "support_type": "paraphrase", "text": "Near the end Socrates concludes that they have failed to discover what courage really is. In the dialogue he says this to Nicias."}
+  ],
+  "pitfalls": [
+    "The dialogue has more speakers than two (Lysimachus, Melesias, Nicias, Laches, Socrates); a retelling with only Socrates and Laches is a simplification and must not claim that nobody else took part.",
+    "Laches was an Athenian general. Calling him a soldier is a simplification, not a fact from the text.",
+    "Socrates does not call the Spartans at Plataea brave in a separate sentence; he counts those who fight while turning back among the courageous (191d–e) and Laches agrees.",
+    "Socrates takes the blame for asking badly, but he does treat the first answer as not answering his question (190e, 191c). Do not say that he accepted it as a definition.",
+    "The Plataea example is introduced with 'they say'; it is an example inside an argument, not a historical account of the battle.",
+    "The dialogue ends without a definition. Do not present 'endurance', 'knowledge' or any other definition as the final answer of Socrates or Plato.",
+    "Socrates in this dialogue is a character written by Plato, not a record of the historical Socrates' words.",
+    "Sentences about a problem with the first answer and closing questions to the reader are the compiler's own wording, not quotations."
+  ],
+  "verification": {
+    "status": "verified",
+    "method": "ai",
+    "checked_on": "2026-11-16",
+    "note_ru": "Положения сверены ИИ с английским переводом У. Лэмба (Perseus, разделы 190d–192d и 199e–201c). Человек карточку не вычитывал: решение владельца от 16.11.2026."
+  }
+}

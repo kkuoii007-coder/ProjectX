@@ -14,6 +14,9 @@ class AIJob(models.Model):
         IMPORT = "import_source"
         INDEX = "index_source"
         SEARCH = "search_sources"
+        # Editorial review of an existing revision: one reviewer call, no
+        # generation, no repair, no user credits (owner budget only).
+        REVIEW = "review"
 
     class Status(models.TextChoices):
         QUEUED = "queued"

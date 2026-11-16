@@ -4,8 +4,7 @@ auth, credits or CSRF behaviour."""
 
 import json
 
-from django.core.management import call_command
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from apps.accounts.models import User
@@ -13,6 +12,7 @@ from apps.credits.models import Wallet, grant_welcome_credits
 from apps.library.models import Favorite, Publication
 from apps.library.presenters import SENTENCES_PER_PARAGRAPH, outline, pick_specimen, reader_parts, reader_terms
 from apps.library.templatetags.ui import ru_plural
+from tests.helpers import publish_demo_fixture
 from tests.test_redesign_contracts import Markup
 
 
@@ -70,8 +70,7 @@ class PresenterTests(TestCase):
 class HomeAndReaderTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        call_command("seed_demo", verbosity=0)
-        cls.publication = Publication.objects.get(slug="socrates-questions")
+        cls.publication = publish_demo_fixture()
         cls.user = User.objects.create_user(login="frontuser", password="TestPassword123!")
         grant_welcome_credits(cls.user)
 
@@ -209,8 +208,7 @@ class RedesignedPagesContractTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        call_command("seed_demo", verbosity=0)
-        cls.publication = Publication.objects.get(slug="socrates-questions")
+        cls.publication = publish_demo_fixture()
         cls.user = User.objects.create_user(login="frontuser", password="TestPassword123!")
         grant_welcome_credits(cls.user)
 
@@ -284,6 +282,7 @@ class RedesignedPagesContractTests(TestCase):
         self.assertContains(response, reverse("workshop:edit_fragment", args=[project.pk]))
         self.assertNotContains(response, 'class="sentence"')
 
+    @override_settings(ASK_ENABLED=True)
     def test_workshop_error_render_without_revision_context(self):
         """Views render project.html with only {project, error} on errors."""
         self.login()
