@@ -196,7 +196,8 @@ def words(request):
 @require_GET
 @login_required
 def favorites(request):
-    favorites = Favorite.objects.filter(user=request.user).select_related("publication", "publication__revision")
+    # Only texts that can still be opened: a withdrawn one would link to a 404.
+    favorites = Favorite.objects.filter(user=request.user, publication__status=Publication.Status.PUBLISHED).select_related("publication", "publication__revision", "publication__thinker")
     return render(request, "accounts/favorites.html", {"favorites": favorites})
 
 

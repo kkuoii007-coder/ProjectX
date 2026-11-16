@@ -1,7 +1,9 @@
 from django.core.management.base import BaseCommand, CommandError
 
+from apps.library.editorial import cover_tone
 from apps.library.models import Publication
 from apps.library.services import PublicationBlocked, publish_revision
+from apps.operations.models import AuditEvent
 
 from ._editorial import read_json, resolve_admin, submitted_revision
 
@@ -30,5 +32,18 @@ class Command(BaseCommand):
             )
         except PublicationBlocked as exc:
             raise CommandError("Публикация отклонена:\n  " + "\n  ".join(str(exc).split("; "))) from exc
+        # The cover tone is presentation only; it is set after the gate has
+        # published the revision and never affects the checks. A file that
+        # names no tone leaves the stored one alone.
+        if "cover" in data and publication.cover_tone != cover_tone(data):
+            earlier_tone, publication.cover_tone = publication.cover_tone, cover_tone(data)
+            publication.save(update_fields=["cover_tone"])
+            AuditEvent.objects.create(
+                actor_reference=f"admin:{admin.pk}",
+                action="cover_tone_changed",
+                object_reference=f"publication:{publication.pk}",
+                reason=f"publish_text by {admin.login}",
+                sanitized_metadata={"from": earlier_tone, "to": publication.cover_tone},
+            )
         state = "Опубликовано" if created else "Уже опубликовано"
         self.stdout.write(self.style.SUCCESS(f"{state}: /read/{publication.slug}/"))

@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db.models import Count, Q
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_protect
@@ -8,7 +8,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.operations.models import Report
 
 from .models import Collection, Favorite, Publication, Thinker
-from .presenters import outline, pick_specimen, reader_parts, reader_terms
+from .presenters import about_text, cover_lines, outline, publication_item, reader_parts, reader_terms, titles, tone
 
 REPORT_CATEGORIES = {
     "factual_error": "Фактическая ошибка",
@@ -20,53 +20,81 @@ REPORT_CATEGORIES = {
 }
 
 REPORTS_PER_USER_PER_DAY = 3
+HOME_OTHERS_LIMIT = 12
+# The existing search is offered only when there is something to search in.
+LIBRARY_SEARCH_MIN = 6
+
+
+def _published():
+    return Publication.objects.filter(status=Publication.Status.PUBLISHED).select_related("revision", "thinker")
 
 
 @require_GET
 def home(request):
-    published = Publication.objects.filter(status=Publication.Status.PUBLISHED)
-    publications = list(published.select_related("revision", "thinker").order_by("-published_at", "slug")[:6])
-    featured = None
-    if publications:
-        payload = publications[0].revision.payload
-        parts = reader_parts(payload)
-        featured = {"publication": publications[0], "outline": outline(payload), "specimen": pick_specimen(parts)}
-    others = [{"publication": p, "outline": outline(p.revision.payload)} for p in publications[1:]]
-    collections = (
-        Collection.objects.annotate(published_count=Count("publications", filter=Q(publications__status=Publication.Status.PUBLISHED)))
-        .filter(published_count__gt=0)[:5]
-    )
-    thinkers = Thinker.objects.filter(publications__status=Publication.Status.PUBLISHED).distinct().order_by("name_ru")[:12]
-    context = {
-        "featured": featured,
-        "others": others,
-        "collections": collections,
-        "thinkers": thinkers,
-        "costs": settings.CREDIT_COSTS,
-        "welcome": settings.WELCOME_CREDITS,
-    }
+    """The cover: the question of the start reading, two of its sentences, one button.
+
+    The start reading is named in settings.START_READING_SLUG. If it is not
+    published, the cover says so; the latest publication is never used instead.
+    """
+    start = None
+    start_publication = _published().filter(slug=settings.START_READING_SLUG).first() if settings.START_READING_SLUG else None
+    if start_publication is not None:
+        start = publication_item(start_publication)
+        start["lines"] = cover_lines(reader_parts(start_publication.revision.payload))
+    others = _published().order_by("-published_at", "slug")
+    if start_publication is not None:
+        others = others.exclude(pk=start_publication.pk)
+    context = {"start": start, "others": [publication_item(p) for p in others[:HOME_OTHERS_LIMIT]]}
     return render(request, "library/home.html", context)
 
 
 @require_GET
 def library(request):
     query = request.GET.get("q", "").strip()[:200]
-    publications = Publication.objects.filter(status=Publication.Status.PUBLISHED).select_related("revision", "thinker")
+    publications = _published().order_by("-published_at", "slug")
+    total = publications.count()
     if query:
-        publications = publications.filter(Q(slug__icontains=query) | Q(revision__payload__title_ru__icontains=query) | Q(thinker__name_ru__icontains=query))
-    return render(request, "library/library.html", {"publications": publications, "query": query})
+        publications = publications.filter(
+            Q(slug__icontains=query)
+            | Q(revision__payload__title_en__icontains=query)
+            | Q(revision__payload__title_ru__icontains=query)
+            | Q(thinker__name_ru__icontains=query)
+            | Q(thinker__name_en__icontains=query)
+        )
+    context = {
+        "publications": publications,
+        "items": [publication_item(p) for p in publications],
+        "query": query,
+        "show_search": bool(query) or total >= LIBRARY_SEARCH_MIN,
+    }
+    return render(request, "library/library.html", context)
+
+
+def _next_publication(publication):
+    """Another published text to read after this one, or None."""
+    others = _published().exclude(pk=publication.pk)
+    later = others.filter(published_at__gt=publication.published_at).order_by("published_at", "slug").first() if publication.published_at else None
+    return later or others.order_by("published_at", "slug").first()
 
 
 @require_GET
 def read(request, slug):
-    publication = get_object_or_404(Publication.objects.select_related("revision", "thinker"), slug=slug, status=Publication.Status.PUBLISHED)
+    publication = get_object_or_404(_published(), slug=slug)
     payload = publication.revision.payload
     is_favorite = request.user.is_authenticated and Favorite.objects.filter(user=request.user, publication=publication).exists()
+    following = _next_publication(publication)
+    shown = titles(payload)
+    if not shown["title_en"]:
+        shown["title_en"] = publication.slug
     context = {
         "publication": publication,
+        **shown,
+        "tone": tone(publication),
         "parts": reader_parts(payload),
         "outline": outline(payload),
         "terms": reader_terms(payload),
+        "about": about_text(payload),
+        "next": publication_item(following) if following else None,
         "is_favorite": is_favorite,
         "report_categories": REPORT_CATEGORIES,
     }
@@ -76,15 +104,17 @@ def read(request, slug):
 @require_GET
 def thinker(request, slug):
     thinker = get_object_or_404(Thinker, slug=slug)
-    publications = Publication.objects.filter(thinker=thinker, status=Publication.Status.PUBLISHED).select_related("revision")
-    return render(request, "library/thinker.html", {"thinker": thinker, "publications": publications})
+    publications = _published().filter(thinker=thinker).order_by("-published_at", "slug")
+    context = {"thinker": thinker, "publications": publications, "items": [publication_item(p) for p in publications]}
+    return render(request, "library/thinker.html", context)
 
 
 @require_GET
 def collection(request, slug):
     collection = get_object_or_404(Collection, slug=slug)
-    publications = collection.publications.filter(status=Publication.Status.PUBLISHED).select_related("revision")
-    return render(request, "library/collection.html", {"collection": collection, "publications": publications})
+    publications = collection.publications.filter(status=Publication.Status.PUBLISHED).select_related("revision", "thinker")
+    context = {"collection": collection, "publications": publications, "items": [publication_item(p) for p in publications]}
+    return render(request, "library/collection.html", context)
 
 
 @require_GET

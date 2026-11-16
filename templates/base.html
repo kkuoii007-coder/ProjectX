@@ -1,60 +1,60 @@
 {% load static %}<!doctype html>
-<html lang="ru">
+<html lang="{% block html_lang %}ru{% endblock %}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f5ef">
+  <meta name="theme-color" content="{% block theme_color %}#8a3a26{% endblock %}">
   <title>{% block title %}Philosophy Reader — философия на простом английском{% endblock %}</title>
   <meta name="description" content="{% block description %}Философские тексты на простом английском с переводом каждого предложения по нажатию и личной ИИ-мастерской.{% endblock %}">
+  {# The mark (one line into three), drawn in place: no image file and no request. #}
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%238a3a26'/%3E%3Cpath d='M0 16H12M12 16C21 16 21 7 32 7M12 16H32M12 16C21 16 21 25 32 25' fill='none' stroke='%23f7f5ef' stroke-width='2.5'/%3E%3C/svg%3E">
   <link rel="preload" href="{% static 'fonts/literata-latin-opsz-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="{% static 'fonts/literata-cyrillic-opsz-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="{% static 'fonts/golos-text-cyrillic-wght-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
-  <script defer src="{% static 'js/reader.js' %}"></script>
+  {# The js class is set before first paint so Russian lines do not blink. It is taken back unless reader.js reports that it ran (data-js-ready): failed load, broken or cut file under any name, exception, or no script after three seconds. #}
+  {% block head_script %}<script>(function(r,d){r.className+=' js';function back(){if(!r.hasAttribute('data-js-ready')){r.classList.remove('js','ui-ru-off')}}d.addEventListener('DOMContentLoaded',back);setTimeout(back,3000)})(document.documentElement,document)</script>{% endblock %}
+  <script defer src="{% static 'js/reader.js' %}" onerror="document.documentElement.classList.remove('js','ui-ru-off')"></script>
 </head>
-<body class="{% block body_class %}{% endblock %}">
-<a class="skip-link" href="#main">К содержанию</a>
-<header class="site-header" id="site-header">
-  <div class="site-header__inner">
-    <a class="brand" href="{% url 'library:home' %}" aria-label="Philosophy Reader — на главную">
-      <span class="brand__mark" aria-hidden="true">¶</span>
-      <span class="brand__name" lang="en">Philosophy Reader</span>
-    </a>
-    <p class="site-header__edition">Философия на простом английском<span>Для любопытства. Не для отметок.</span></p>
-    {% if user.is_authenticated and wallet %}
-    <a href="{% url 'account:credits' %}" class="balance" aria-label="Доступно кредитов: {{ wallet.available_credits }}{% if wallet.reserved_credits %}, в работе: {{ wallet.reserved_credits }}{% endif %}">
-      <span class="balance__label">Доступно</span>
-      <strong class="balance__value">{{ wallet.available_credits }}</strong>
-      {% if wallet.reserved_credits %}<span class="balance__reserved">· в работе {{ wallet.reserved_credits }}</span>{% endif %}
-    </a>
-    {% endif %}
-    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Меню</button>
+<body class="{% block body_class %}{% endblock %}" data-cover="{% block cover_tone %}clay{% endblock %}">
+{% block skip_link %}<a class="skip-link" href="#main">К содержанию</a>{% endblock %}
+{% block site_header %}
+<header class="site-header site-header--service" id="site-header">
+  <div class="wrap site-header__inner">
+    <a class="brand" href="{% url 'library:home' %}" aria-label="Philosophy Reader — на главную"><span lang="en">Philosophy Reader</span></a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav"><span class="menu-toggle__chip">Меню</span></button>
     <nav class="site-nav" id="site-nav" aria-label="Основная навигация">
-      <a href="{% url 'library:library' %}"{% if request.resolver_match.url_name == 'library' or request.resolver_match.url_name == 'read' or request.resolver_match.url_name == 'thinker' or request.resolver_match.url_name == 'collection' %} aria-current="page"{% endif %}>Библиотека</a>
-      <a href="{% url 'library:home' %}#workshop"{% if request.resolver_match.namespace == 'workshop' %} aria-current="page"{% endif %}>Мастерская</a>
+      <a href="{% url 'library:library' %}">Библиотека</a>
+      <a href="{% url 'workshop:create_project' %}"{% if request.resolver_match.namespace == 'workshop' %} aria-current="page"{% endif %}>Мастерская</a>
       <a href="{% url 'library:credits_help' %}"{% if request.resolver_match.url_name == 'credits_help' %} aria-current="page"{% endif %}>Как работают кредиты</a>
-      <span class="site-nav__spacer" aria-hidden="true"></span>
       {% if user.is_authenticated %}
-        <a href="{% url 'account:dashboard' %}">Кабинет</a>
+        {% if wallet %}<a href="{% url 'account:credits' %}" class="balance" aria-label="Доступно кредитов: {{ wallet.available_credits }}{% if wallet.reserved_credits %}, в работе: {{ wallet.reserved_credits }}{% endif %}"><span class="balance__label">Кредиты</span> <strong class="balance__value">{{ wallet.available_credits }}</strong>{% if wallet.reserved_credits %} <span class="balance__reserved">· в работе {{ wallet.reserved_credits }}</span>{% endif %}</a>{% endif %}
+        <a href="{% url 'account:dashboard' %}"{% if request.resolver_match.namespace == 'account' %} aria-current="page"{% endif %}>Кабинет</a>
         <form method="post" action="{% url 'accounts:logout' %}" class="inline">{% csrf_token %}<button class="link" type="submit">Выйти</button></form>
       {% else %}
-        <a href="{% url 'accounts:login' %}">Войти</a>
-        <a class="btn btn--small" href="{% url 'accounts:register' %}">Регистрация</a>
+        <a href="{% url 'accounts:login' %}"{% if request.resolver_match.url_name == 'login' %} aria-current="page"{% endif %}>Войти</a>
       {% endif %}
     </nav>
   </div>
 </header>
+{% endblock %}
 <main id="main" tabindex="-1">
-{% if messages %}<div class="notices" aria-live="polite">{% for message in messages %}<p class="notice {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+{% if messages %}<div class="notices" aria-live="polite" lang="ru"><div class="wrap">{% for message in messages %}<p class="notice {{ message.tags }}">{{ message }}</p>{% endfor %}</div></div>{% endif %}
 {% block content %}{% endblock %}
 </main>
+{% block site_footer %}
 <footer class="site-footer">
-  <div class="site-footer__inner">
-    <p class="site-footer__mark" lang="en">Philosophy<br>Reader<span>Читать. Спрашивать. Думать.</span></p>
-    <p class="site-footer__note">Материалы предназначены для знакомства с философией и не гарантируют отсутствия ошибок. <a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p>
+  <div class="wrap site-footer__inner">
+    <p class="site-footer__mark" lang="en">Philosophy Reader</p>
+    <nav class="site-footer__nav" aria-label="Ссылки в подвале">
+      <a href="{% url 'library:library' %}">Библиотека</a>
+      <a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a>
+    </nav>
+    <p class="site-footer__note">Материалы предназначены для знакомства с философией и не гарантируют отсутствия ошибок.</p>
     <p class="site-footer__colophon">Набрано шрифтами Literata и Golos Text (SIL Open Font License).</p>
   </div>
 </footer>
+{% endblock %}
 </body>
 </html>

@@ -1,9 +1,16 @@
-/* Philosophy Reader — small progressive-enhancement script.
-   Without JS: translations are visible, nav is open. With JS: translations open on demand. */
+/* Philosophy Reader — small progressive-enhancement script, no dependencies.
+   Without JS: Russian lines are visible, the menu is open, a fork in the text
+   is plain paragraphs. With JS: a Russian line opens under its own sentence.
+   Nothing here sends, saves or scores anything; the only stored value is the
+   reader's choice to show or hide Russian interface captions. */
 (function () {
   'use strict';
 
   var doc = document;
+  var root = doc.documentElement;
+  var RU_KEY = 'pr-ui-ru';
+
+  /* ---- a Russian line under its sentence ---------------------------------- */
 
   function setOpen(sentence, open) {
     var gloss = doc.getElementById(sentence.getAttribute('data-gloss'));
@@ -22,136 +29,138 @@
     return !!selection && !selection.isCollapsed && selection.toString().trim().length > 0;
   }
 
+  function sentenceOf(event) {
+    return event.target.closest ? event.target.closest('.s[data-gloss]') : null;
+  }
+
   function initGlosses() {
     var sentences = doc.querySelectorAll('.s[data-gloss]');
     if (!sentences.length) { return; }
 
     doc.addEventListener('click', function (event) {
-      var sentence = event.target.closest && event.target.closest('.s[data-gloss]');
+      var sentence = sentenceOf(event);
       if (!sentence || hasTextSelection()) { return; }
       setOpen(sentence, !isOpen(sentence));
-      syncToggleAll();
     });
 
     doc.addEventListener('keydown', function (event) {
-      var sentence = event.target.closest && event.target.closest('.s[data-gloss]');
+      var sentence = sentenceOf(event);
       if (!sentence) { return; }
-      if (event.key === 'Enter' || event.key === ' ') {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
         event.preventDefault();
         setOpen(sentence, !isOpen(sentence));
-        syncToggleAll();
       } else if (event.key === 'Escape' && isOpen(sentence)) {
         setOpen(sentence, false);
-        syncToggleAll();
       }
     });
 
-    // No-JS HTML is readable prose. Add button semantics only with working handlers.
+    // The no-JS page is readable prose. Button semantics come only with working handlers.
     sentences.forEach(function (sentence) {
-      if (!sentence.hasAttribute('tabindex')) {
-        sentence.setAttribute('tabindex', '0');
-        sentence.setAttribute('role', 'button');
-        sentence.setAttribute('aria-expanded', 'false');
-        sentence.setAttribute('aria-controls', sentence.getAttribute('data-gloss'));
-      }
+      sentence.setAttribute('tabindex', '0');
+      sentence.setAttribute('role', 'button');
+      sentence.setAttribute('aria-controls', sentence.getAttribute('data-gloss'));
+      // A line marked data-open starts open, so the reader sees what a tap does.
+      setOpen(sentence, sentence.hasAttribute('data-open'));
     });
   }
 
-  var toggleAll = null;
+  /* ---- RU: show or hide Russian interface captions ------------------------ */
 
-  function syncToggleAll() {
-    if (!toggleAll) { return; }
-    var all = doc.querySelectorAll('.reader .s[data-gloss]');
-    var openCount = doc.querySelectorAll('.reader .s.is-open').length;
-    var everythingOpen = all.length > 0 && openCount === all.length;
-    var reader = doc.querySelector('[data-reader]');
-    // Several long notes must never collide or drift down the margin.
-    // Use inline translations for every multi-open state, including manual toggles.
-    if (reader) { reader.classList.toggle('is-all', openCount > 1); }
-    toggleAll.setAttribute('aria-pressed', String(everythingOpen));
-    toggleAll.textContent = everythingOpen ? 'Скрыть переводы' : 'Показать переводы';
+  function readPref() {
+    try { return window.localStorage.getItem(RU_KEY); } catch (error) { return null; }
   }
 
-  function initToggleAll() {
-    var tools = doc.querySelector('[data-tools]');
-    toggleAll = doc.querySelector('[data-toggle-all]');
-    if (!tools || !toggleAll) { return; }
-    tools.hidden = false;
-    toggleAll.addEventListener('click', function () {
-      var open = toggleAll.getAttribute('aria-pressed') !== 'true';
-      var reader = doc.querySelector('[data-reader]');
-      if (reader) { reader.classList.toggle('is-all', open); }
-      doc.querySelectorAll('.reader .s[data-gloss]').forEach(function (sentence) { setOpen(sentence, open); });
-      syncToggleAll();
+  function writePref(value) {
+    try { window.localStorage.setItem(RU_KEY, value); } catch (error) { /* private mode: the choice lasts for this page */ }
+  }
+
+  function initRuToggle() {
+    var button = doc.querySelector('[data-ru-toggle]');
+    if (!button) {
+      // Pages that are Russian throughout have no switch and never hide captions.
+      root.classList.remove('ui-ru-off');
+      return;
+    }
+    function apply(show) {
+      root.classList.toggle('ui-ru-off', !show);
+      button.setAttribute('aria-pressed', String(show));
+    }
+    apply(readPref() !== 'off');
+    button.hidden = false;
+    button.addEventListener('click', function () {
+      var show = button.getAttribute('aria-pressed') !== 'true';
+      apply(show);
+      writePref(show ? 'on' : 'off');
     });
   }
+
+  /* ---- the menu on narrow service pages ----------------------------------- */
 
   function initMenu() {
     var button = doc.querySelector('.menu-toggle');
     var nav = doc.getElementById('site-nav');
     if (!button || !nav) { return; }
-    button.addEventListener('click', function () {
-      var open = nav.classList.toggle('is-open');
+    function setMenu(open) {
+      nav.classList.toggle('is-open', open);
       button.setAttribute('aria-expanded', String(open));
+    }
+    button.addEventListener('click', function () {
+      setMenu(!nav.classList.contains('is-open'));
     });
     nav.addEventListener('click', function (event) {
-      if (event.target.closest('a')) {
-        nav.classList.remove('is-open');
-        button.setAttribute('aria-expanded', 'false');
-      }
+      if (event.target.closest('a')) { setMenu(false); }
     });
     doc.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && nav.classList.contains('is-open')) {
-        nav.classList.remove('is-open');
-        button.setAttribute('aria-expanded', 'false');
+        setMenu(false);
         button.focus();
       }
     });
   }
 
-  function initReadingLine() {
-    var bar = doc.querySelector('[data-reading-line]');
-    var article = doc.querySelector('[data-reader]');
-    if (!bar || !article) { return; }
-    var frame = null;
-    function update() {
-      frame = null;
-      var rect = article.getBoundingClientRect();
-      var total = rect.height - window.innerHeight;
-      var progress = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : 0;
-      bar.style.transform = 'scaleX(' + progress.toFixed(4) + ')';
-    }
-    function schedule() { if (frame === null) { frame = window.requestAnimationFrame(update); } }
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    update();
-  }
+  /* ---- a fork in the text: three buttons, one prepared line ---------------- */
 
-  function initRail() {
-    var links = doc.querySelectorAll('[data-part-link]');
-    if (!links.length || !('IntersectionObserver' in window)) { return; }
-    var byId = {};
-    links.forEach(function (link) { byId[link.getAttribute('data-part-link')] = link; });
-    var observer = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (!entry.isIntersecting) { return; }
-        links.forEach(function (link) { link.classList.remove('is-current'); link.removeAttribute('aria-current'); });
-        var link = byId[entry.target.id];
-        if (link) { link.classList.add('is-current'); link.setAttribute('aria-current', 'true'); }
+  function initForks() {
+    doc.querySelectorAll('[data-fork]').forEach(function (fork) {
+      var group = fork.querySelector('[data-fork-buttons]');
+      var buttons = fork.querySelectorAll('[data-fork-choice]');
+      if (!group || !buttons.length) { return; }
+
+      function choose(button) {
+        buttons.forEach(function (other) {
+          var option = doc.getElementById(other.getAttribute('data-fork-choice'));
+          var chosen = other === button;
+          other.setAttribute('aria-pressed', String(chosen));
+          if (option) { option.classList.toggle('is-chosen', chosen); }
+        });
+        fork.classList.add('has-choice');
+      }
+
+      buttons.forEach(function (button) {
+        button.setAttribute('aria-controls', button.getAttribute('data-fork-choice'));
+        button.addEventListener('click', function () { choose(button); });
       });
-    }, { rootMargin: '-20% 0px -70% 0px' });
-    doc.querySelectorAll('.part').forEach(function (part) { observer.observe(part); });
+      group.hidden = false;
+      fork.classList.add('is-ready');
+    });
   }
 
   function init() {
-    initGlosses();
-    initToggleAll();
-    initMenu();
-    initReadingLine();
-    initRail();
-    // Enhance only after this file actually loads. A failed/blocked script
-    // leaves the menu and all translations visible instead of inaccessible.
-    doc.documentElement.classList.add('js');
+    try {
+      initGlosses();
+      initRuToggle();
+      initMenu();
+      initForks();
+      // Enhance only when everything above worked. The page waits for this
+      // mark: without it the inline script in <head> takes the js class back.
+      root.setAttribute('data-js-ready', '');
+      root.classList.add('js');
+    } catch (error) {
+      // A broken script must not hide anything: back to the readable no-JS page.
+      root.removeAttribute('data-js-ready');
+      root.classList.remove('js');
+      root.classList.remove('ui-ru-off');
+    }
   }
 
   if (doc.readyState === 'loading') { doc.addEventListener('DOMContentLoaded', init); } else { init(); }

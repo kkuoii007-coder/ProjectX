@@ -1,0 +1,16 @@
+{% extends 'base_reading.html' %}
+{% block title %}Page not found — Philosophy Reader{% endblock %}
+{% block body_class %}page-missing{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="wrap">
+    <h1>This page is not here.</h1>
+    <p class="ru-ui" lang="ru">Такой страницы нет.</p>
+    <p class="page-head__lead">The text may have moved, or the address has a mistake.<span class="ru-ui" lang="ru">Возможно, текст переехал или в адресе ошибка.</span></p>
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
+  <p class="page-action"><a class="btn btn--captioned" href="{% url 'library:home' %}">Home page<span class="ru-ui" lang="ru">На главную</span></a></p>
+</div>
+{% endblock %}

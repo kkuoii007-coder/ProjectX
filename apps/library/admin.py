@@ -17,7 +17,7 @@ class CollectionAdmin(admin.ModelAdmin):
 
 @admin.register(Publication)
 class PublicationAdmin(admin.ModelAdmin):
-    list_display = ("slug", "status", "source_type", "published_at")
+    list_display = ("slug", "status", "cover_tone", "source_type", "published_at")
     list_filter = ("status", "source_type")
     # status is read-only too: a withdrawn text returns only through
     # publish_revision, never by flipping the field back.

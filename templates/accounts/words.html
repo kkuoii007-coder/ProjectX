@@ -1,11 +1,14 @@
 {% extends 'base.html' %}
 {% block title %}Сохранённые слова · Philosophy Reader{% endblock %}
 {% block content %}
-<div class="page-head">
+<header class="page-head">
+  <div class="wrap">
     <p class="kicker">Кабинет</p>
     <h1>Сохранённые слова</h1>
-</div>
-<div class="wrap">
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
     {% include 'includes/account_nav.html' with active='words' %}
     <section class="account-section">
         <h2 class="section-title">Новое слово</h2>
@@ -23,7 +26,7 @@
             {% empty %}
             <div class="empty-state">
                 <p>Слов пока нет. Сохраните первый термин с переводом в форме выше.</p>
-                <p><a href="{% url 'library:library' %}">Выбрать текст для чтения</a></p>
+                <p><a class="tap" href="{% url 'library:library' %}">Выбрать текст для чтения</a></p>
             </div>
             {% endfor %}
         </div>

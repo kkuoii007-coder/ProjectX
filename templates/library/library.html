@@ -1,34 +1,37 @@
-{% extends 'base.html' %}
-{% block title %}Библиотека · Philosophy Reader{% endblock %}
+{% extends 'base_reading.html' %}
+{% block title %}Library · Philosophy Reader{% endblock %}
 {% block content %}
-<div class="page-head">
-  <p class="kicker">Каталог</p>
-  <h1>Библиотека</h1>
-  <p class="meta">Короткие тексты на простом английском с переводом каждого предложения на полях.</p>
-</div>
-<div class="wrap">
+<header class="page-head">
+  <div class="wrap">
+    <h1>Library</h1>
+    <p class="ru-ui" lang="ru">Библиотека</p>
+    <p class="page-head__lead">Every text is one big question.<span class="ru-ui" lang="ru">Каждый текст — один большой вопрос.</span></p>
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
+  {% if show_search %}
   <form method="get" class="search-form" role="search">
     <div>
-      <label for="q">Поиск по названию и мыслителю</label>
+      <label for="q">Find a text<span class="ru-ui" lang="ru">Поиск по названию и мыслителю</span></label>
       <input id="q" name="q" type="search" value="{{ query }}" maxlength="200">
     </div>
-    <button type="submit">Найти</button>
-    {% if query %}<a class="search-reset" href="{% url 'library:library' %}">Сбросить поиск</a>{% endif %}
+    <button class="btn--captioned" type="submit">Find<span class="ru-ui" lang="ru">Найти</span></button>
+    {% if query %}<a class="search-reset" href="{% url 'library:library' %}">Show all texts<span class="ru-ui" lang="ru">Показать все тексты</span></a>{% endif %}
   </form>
-  {% if query %}<p class="count-note">Результаты по запросу «{{ query }}».</p>{% endif %}
+  {% endif %}
+  {% if query %}<p class="count-note">Results for “{{ query }}”.<span class="ru-ui" lang="ru">Результаты по запросу «{{ query }}».</span></p>{% endif %}
   <div class="catalog-list">
-    {% for p in publications %}
-    {% include 'includes/publication_card.html' with p=p %}
+    {% for item in items %}
+    {% include 'includes/question_card.html' with item=item %}
     {% empty %}
     <div class="empty-state">
       {% if query %}
-      <h2>Ничего не найдено</h2>
-      <p>Попробуйте другое название или имя мыслителя.</p>
-      <p><a href="{% url 'library:library' %}">Показать все тексты</a></p>
+      <h2>Nothing found.<span class="ru-ui" lang="ru">Ничего не найдено.</span></h2>
+      <p>Try another word or name.<span class="ru-ui" lang="ru">Попробуйте другое название или имя мыслителя.</span></p>
       {% else %}
-      <h2>Первые материалы готовятся</h2>
-      <p>Здесь появятся тексты на простом английском с готовым переводом.</p>
-      <p><a href="{% url 'library:home' %}">На главную</a></p>
+      <h2>The first question is coming soon.<span class="ru-ui" lang="ru">Первый вопрос скоро появится.</span></h2>
+      <p><a href="{% url 'library:home' %}">Home page<span class="ru-ui" lang="ru">На главную</span></a></p>
       {% endif %}
     </div>
     {% endfor %}

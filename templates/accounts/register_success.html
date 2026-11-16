@@ -1,10 +1,16 @@
 {% extends 'base.html' %}
 {% block title %}Аккаунт создан · Philosophy Reader{% endblock %}
 {% block content %}
-<section class="form-page">
-    {% include 'includes/account_nav.html' %}
+<header class="page-head">
+  <div class="wrap">
     <p class="kicker">Регистрация</p>
     <h1>Аккаунт создан</h1>
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
+<section class="form-page">
+    {% include 'includes/account_nav.html' %}
     <div class="success-box" role="status">
         <p><strong>Вы зарегистрированы. Данные сохранены.</strong></p>
         <p>Логин: <strong>{{ registered_login }}</strong>. Мы не запрашивали email или телефон, восстановление доступа
@@ -16,4 +22,5 @@
         <a class="btn btn--ghost" href="{% url 'library:library' %}">Открыть библиотеку</a>
     </p>
 </section>
+</div>
 {% endblock %}

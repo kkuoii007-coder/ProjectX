@@ -1,17 +1,20 @@
 {% extends 'base.html' %}
 {% block title %}Кредиты · Philosophy Reader{% endblock %}
 {% block content %}
-<div class="page-head">
+<header class="page-head">
+  <div class="wrap">
     <p class="kicker">Кабинет</p>
     <h1>Кредиты</h1>
-</div>
-<div class="wrap">
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
     {% include 'includes/account_nav.html' with active='credits' %}
     <section class="account-section">
         <h2 class="section-title">Баланс</h2>
         <p class="balance-figure"><strong>{{ wallet.available_credits }}</strong> <small>доступно</small></p>
         <p class="meta">В работе {{ wallet.reserved_credits }} · всего {{ wallet.total_credits }}</p>
-        <p class="meta"><a href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p>
+        <p class="meta"><a class="tap" href="{% url 'library:credits_help' %}">Правила расхода кредитов</a></p>
     </section>
     <section class="account-section">
         <h2 class="section-title">Пополнение</h2>
@@ -22,6 +25,7 @@
     </section>
     <section class="account-section account-section--wide">
         <h2 class="section-title">История</h2>
+        <p class="table-scroll__hint">Таблицу можно листать вбок.</p>
         <div class="table-scroll" tabindex="0" role="region" aria-label="История операций с кредитами">
         <table>
             <thead>

@@ -3,6 +3,7 @@ accessibility hooks the JS relies on, and presentation changes do not touch
 auth, credits or CSRF behaviour."""
 
 import json
+from unittest.mock import patch
 
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -74,33 +75,46 @@ class HomeAndReaderTests(TestCase):
         cls.user = User.objects.create_user(login="frontuser", password="TestPassword123!")
         grant_welcome_credits(cls.user)
 
-    def test_home_shows_real_material_and_workshop_for_guest(self):
-        response = self.client.get(reverse("library:home"))
+    def test_home_is_a_cover_with_real_material_and_no_workshop_for_guest(self):
+        with override_settings(START_READING_SLUG=self.publication.slug):
+            response = self.client.get(reverse("library:home"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.publication.revision.payload["title_ru"])
-        self.assertContains(response, reverse("library:read", args=[self.publication.slug]))
-        self.assertContains(response, 'id="workshop"')
-        self.assertContains(response, reverse("workshop:create_project"))
-        self.assertContains(response, "csrfmiddlewaretoken")
-        self.assertContains(response, "Для создания текста нужен вход")
-        # Part titles from the real payload appear in the contents list.
-        self.assertContains(response, "A different kind of wisdom")
-        # Credit numbers come from settings, not literals.
-        self.assertNotContains(response, "Доступно:")
+        self.assertContains(response, reverse("library:read", args=[self.publication.slug]), count=1)
+        self.assertContains(response, "Start reading")
+        # The first sentence of the real payload stands on the cover, opened.
+        markup = Markup(response)
+        lines = markup.find("span", css_class="s")
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0].text, self.publication.revision.payload["parts"][0]["sentences"][0]["en"])
+        self.assertIn("data-open", lines[0].attrs)
+        self.assertNotIn("data-open", lines[1].attrs)
+        # The workshop left the cover: no form, no token, no login hint.
+        self.assertNotContains(response, 'id="workshop"')
+        self.assertNotContains(response, reverse("workshop:create_project"))
+        self.assertNotContains(response, "<form")
+        self.assertNotContains(response, "csrfmiddlewaretoken")
+        self.assertNotContains(response, "Для создания текста нужен вход")
 
-    def test_home_shows_balance_for_signed_in_user_without_login_hint(self):
+    def test_home_for_signed_in_user_has_no_balance_or_service_navigation(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse("library:home"))
-        self.assertContains(response, "balance__value")
-        self.assertNotContains(response, "Для создания текста нужен вход")
+        self.assertNotContains(response, "balance__value")
+        self.assertNotContains(response, 'class="site-nav"')
+        self.assertNotContains(response, "<form")
+        # The way to the account stays, in the footer.
+        self.assertContains(response, reverse("account:dashboard"))
+        self.assertNotContains(response, reverse("accounts:login"))
 
     def test_home_without_publications_is_honest_empty_state(self):
         Publication.objects.update(status=Publication.Status.HIDDEN)
         response = self.client.get(reverse("library:home"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Первые материалы готовятся")
-        self.assertContains(response, 'id="workshop"')
-        self.assertNotContains(response, "Начать читать")
+        self.assertContains(response, "The first question is coming soon.")
+        self.assertContains(response, "Первый вопрос скоро появится.")
+        self.assertNotContains(response, 'id="workshop"')
+        self.assertNotContains(response, "Start reading")
+        self.assertNotContains(response, 'class="publication-card"')
 
     def test_reader_markup_keeps_translation_hooks(self):
         response = self.client.get(reverse("library:read", args=[self.publication.slug]))
@@ -129,14 +143,19 @@ class HomeAndReaderTests(TestCase):
                     self.assertEqual(body.count(f'id="{s["id"]}"'), 1)
         self.assertContains(response, "Сократ жил в Афинах")
         self.assertContains(response, "Сократ")
-        self.assertContains(response, "Примечание редакции")
+        # The note about the text now stands after it, under "About this text".
+        self.assertNotContains(response, "Примечание редакции")
+        self.assertContains(response, "About this text")
         self.assertContains(response, "добродетель")
 
     def test_reader_guest_has_no_mutating_forms(self):
         response = self.client.get(reverse("library:read", args=[self.publication.slug]))
         self.assertNotContains(response, "favorite")
         self.assertNotContains(response, reverse("library:create_report", args=[self.publication.slug]))
-        self.assertContains(response, reverse("accounts:login"))
+        self.assertNotContains(response, "<form")
+        self.assertNotContains(response, "csrfmiddlewaretoken")
+        # A guest gets a plain link to the sign-in page (footer), not a prompt in the text.
+        self.assertContains(response, reverse("accounts:login"), count=1)
 
     def test_reader_user_gets_favorite_and_report_forms_with_csrf(self):
         client = Client(enforce_csrf_checks=True)
@@ -145,7 +164,9 @@ class HomeAndReaderTests(TestCase):
         self.assertContains(response, reverse("account:favorite_toggle", args=[self.publication.pk]))
         self.assertContains(response, reverse("library:create_report", args=[self.publication.slug]))
         self.assertContains(response, "Добавить в избранное")
-        self.assertEqual(response.content.decode().count("csrfmiddlewaretoken"), 3)
+        # Two forms on the reading page (favourite, report), each with its own token;
+        # the sign-out form lives in the service header, not on the reading path.
+        self.assertEqual(response.content.decode().count("csrfmiddlewaretoken"), 2)
         # Without a token the toggle is rejected: the redesign did not weaken CSRF.
         rejected = client.post(reverse("account:favorite_toggle", args=[self.publication.pk]))
         self.assertEqual(rejected.status_code, 403)
@@ -219,8 +240,11 @@ class RedesignedPagesContractTests(TestCase):
         response = self.client.get(reverse("library:library"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'class="page-head"')
-        self.assertContains(response, 'class="search-form"')
         self.assertContains(response, self.publication.revision.payload["title_ru"])
+        # One text: nothing to search through, so no search field.
+        self.assertNotContains(response, 'class="search-form"')
+        with patch("apps.library.views.LIBRARY_SEARCH_MIN", 1):
+            self.assertContains(self.client.get(reverse("library:library")), 'class="search-form"')
 
     def test_collection_and_thinker_pages_use_page_head(self):
         collection = self.publication.collections.first()

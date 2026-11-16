@@ -1,22 +1,24 @@
-{% extends 'base.html' %}
+{% extends 'base_reading.html' %}
 {% block title %}{{ collection.title_ru }} · Philosophy Reader{% endblock %}
 {% block content %}
-<div class="page-head">
-    <p class="kicker">Подборка</p>
-    <h1>{{ collection.title_ru }}</h1>
-    <p class="meta">{{ collection.description_ru }}</p>
-</div>
-<div class="wrap">
-    <p class="meta"><a href="{% url 'library:library' %}">Все тексты библиотеки</a></p>
-    <div class="catalog-list">
-        {% for p in publications %}
-        {% include 'includes/publication_card.html' with p=p %}
-        {% empty %}
-        <div class="empty-state">
-            <p>Подборка пуста. Пока можно выбрать текст из общего каталога.</p>
-            <p><a href="{% url 'library:library' %}">В библиотеку</a></p>
-        </div>
-        {% endfor %}
+<header class="page-head">
+  <div class="wrap">
+    <p class="kicker">Collection<span class="ru-ui" lang="ru">Подборка</span></p>
+    <h1 lang="ru">{{ collection.title_ru }}</h1>
+    {% if collection.description_ru %}<p class="page-head__lead" lang="ru">{{ collection.description_ru }}</p>{% endif %}
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
+  <div class="catalog-list">
+    {% for item in items %}
+    {% include 'includes/question_card.html' with item=item %}
+    {% empty %}
+    <div class="empty-state">
+      <h2>No texts here yet.<span class="ru-ui" lang="ru">Подборка пока пуста.</span></h2>
     </div>
+    {% endfor %}
+  </div>
+  <p class="back-link"><a href="{% url 'library:library' %}">All texts<span class="ru-ui" lang="ru">Все тексты библиотеки</span></a></p>
 </div>
 {% endblock %}

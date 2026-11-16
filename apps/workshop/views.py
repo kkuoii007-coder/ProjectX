@@ -13,6 +13,11 @@ from apps.ai.services import InsufficientCredits, JobConflict, JobError, QueueFu
 from .models import Message, Project, Revision
 
 
+def _create_page(request, status=200, **extra):
+    """The workshop entry page (the form used to live on the home page)."""
+    return render(request, "workshop/create.html", {"costs": settings.CREDIT_COSTS, **extra}, status=status)
+
+
 @require_http_methods(["GET", "POST"])
 @login_required
 def create_project(request):
@@ -22,7 +27,7 @@ def create_project(request):
             return redirect("library:home")
         title = request.POST.get("topic", "").strip()[:200]
         if not title or len(title) > 2000:
-            return render(request, "workshop/create.html", {"error": "Введите тему запроса"})
+            return _create_page(request, error="Введите тему запроса")
         try:
             with transaction.atomic():
                 project = Project.objects.create(owner=request.user, title=title, mode=mode)
@@ -36,11 +41,11 @@ def create_project(request):
         except InsufficientCredits:
             # Атомарный блок уже откатился: проект не создан. Рендерим вне транзакции,
             # иначе контекст-процессор упадёт на запросе в прерванной транзакции.
-            return render(request, "workshop/create.html", {"error": "Недостаточно кредитов для этого действия", "topic": title}, status=402)
+            return _create_page(request, status=402, error="Недостаточно кредитов для этого действия", topic=title)
         except (JobConflict, QueueFull, JobError) as exc:
-            return render(request, "workshop/create.html", {"error": str(exc), "topic": title}, status=409)
+            return _create_page(request, status=409, error=str(exc), topic=title)
         return redirect("workshop:project", project_id=project.pk)
-    return render(request, "workshop/create.html")
+    return _create_page(request)
 
 
 @require_GET

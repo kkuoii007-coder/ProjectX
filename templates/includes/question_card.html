@@ -1,0 +1,7 @@
+{# One published text as a question in its own tone. One link per text. #}
+<article class="publication-card" data-cover="{{ item.tone }}">
+  {% if level == 3 %}<h3 class="publication-card__title"><a href="{{ item.url }}"{% if item.title_lang == 'ru' %} lang="ru"{% endif %}>{{ item.title_en }}</a></h3>{% else %}<h2 class="publication-card__title"><a href="{{ item.url }}"{% if item.title_lang == 'ru' %} lang="ru"{% endif %}>{{ item.title_en }}</a></h2>{% endif %}
+  {% if item.title_ru %}<p class="publication-card__title-ru ru-ui" lang="ru">{{ item.title_ru }}</p>{% endif %}
+  {% include 'includes/fork.html' %}
+  <p class="publication-card__meta">{% if item.publication.thinker and not hide_thinker %}<a href="{% url 'library:thinker' item.publication.thinker.slug %}">{{ item.publication.thinker.name_en }}</a><span aria-hidden="true"> · </span>{% endif %}{{ item.part_count }} part{{ item.part_count|pluralize }}</p>
+</article>

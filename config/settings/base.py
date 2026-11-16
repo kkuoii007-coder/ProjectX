@@ -142,6 +142,13 @@ COMMUNITY_ENABLED = False
 # off, the request is refused before any job or reservation is created.
 ASK_ENABLED = env_bool("ASK_ENABLED", False)
 
+# The reading shown on the cover of the home page. It is named explicitly:
+# the home page never falls back to "the latest published text". Empty or
+# unpublished -> the cover says that the first question is coming soon.
+START_READING_SLUG = env("START_READING_SLUG", "what-does-it-mean-to-be-brave")
+# Address behind the single "Write to us" link at the end of a text.
+CONTACT_EMAIL = env("CONTACT_EMAIL", "evgeniy.shults.2016@mail.ru")
+
 # Stage 5: sources and RAG (docs/spec/docs/configuration.md).
 SOURCE_UPLOAD_MAX_BYTES = env_int("SOURCE_UPLOAD_MAX_BYTES", 5 * 1024 * 1024)
 SOURCE_MAX_PAGES = env_int("SOURCE_MAX_PAGES", 150)

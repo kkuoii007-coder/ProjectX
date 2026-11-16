@@ -21,7 +21,7 @@ from django.utils import timezone
 from apps.operations.models import AuditEvent
 from apps.workshop.models import Project, Revision, RevisionKnowledgeCard
 
-from .models import KnowledgeCard
+from .models import KnowledgeCard, Publication
 
 TEXT_SCHEMA = "editorial-text-1"
 CARD_SCHEMA = "knowledge-card-1"
@@ -37,6 +37,10 @@ MAX_GLOSSARY = 20
 # Editorial defaults from docs/spec/docs/content-quality.md. Diagnostic only.
 PART_WORDS_ALLOWED = (45, 110)
 LONG_SENTENCE_WORDS = 16
+# The cover shows the title and the first two sentences on one screen. Longer
+# ones still publish, but on a small phone the button may fall below the fold.
+COVER_TITLE_CHARS = 48
+COVER_LINE_CHARS = 64
 
 PAYLOAD_KEYS = {
     "title_en", "title_ru", "lead_ru", "parts", "glossary", "source_en",
@@ -179,6 +183,13 @@ def check_editorial_payload(payload):
         if not _is_text(term["term_en"], 100) or not _is_text(term["explanation_en"], 400) or not _is_text(term["translation_ru"], 100):
             errors.append(f"Слово {index}: пустое или слишком длинное поле")
     diagnostics["fork_count"] = sum(1 for part in parts if isinstance(part, dict) and "fork" in part)
+    title = payload.get("title_en")
+    if isinstance(title, str) and len(title) > COVER_TITLE_CHARS:
+        diagnostics["warnings_ru"].append(f"Обложка: заголовок длиннее {COVER_TITLE_CHARS} знаков, на небольшом телефоне кнопка может уйти ниже первого экрана")
+    first = parts[0].get("sentences") if parts and isinstance(parts[0], dict) else None
+    for index, sentence in enumerate(first[:2] if isinstance(first, list) else [], start=1):
+        if isinstance(sentence, dict) and isinstance(sentence.get("en"), str) and len(sentence["en"]) > COVER_LINE_CHARS:
+            diagnostics["warnings_ru"].append(f"Обложка: предложение {index} длиннее {COVER_LINE_CHARS} знаков и займёт несколько строк")
     return errors, diagnostics
 
 
@@ -331,6 +342,8 @@ def submit_text(data, *, actor="cli"):
         raise EditorialError("Текст: slug — латинские буквы, цифры, дефис и подчёркивание, до 50 символов")
     payload = data.get("payload")
     errors, _ = check_editorial_payload(payload)
+    if "cover" in data and data["cover"] not in Publication.CoverTone.values:
+        errors.append(f"Текст: cover — один из тонов {', '.join(Publication.CoverTone.values)}")
     card_refs = data.get("knowledge_cards") or []
     cards = []
     if not isinstance(card_refs, list) or not card_refs:
@@ -390,6 +403,16 @@ def submit_text(data, *, actor="cli"):
                 },
             )
     return revision, created
+
+
+def cover_tone(data):
+    """The cover tone named in the text file (outside the payload), default clay.
+
+    The tone is presentation, not content: it is not part of the revision
+    hash and changing it needs no new review.
+    """
+    value = data.get("cover") if isinstance(data, dict) else None
+    return value if value in Publication.CoverTone.values else Publication.CoverTone.CLAY
 
 
 def find_submitted_revision(data):

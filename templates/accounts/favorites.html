@@ -1,11 +1,14 @@
 {% extends 'base.html' %}
 {% block title %}Избранное · Philosophy Reader{% endblock %}
 {% block content %}
-<div class="page-head">
+<header class="page-head">
+  <div class="wrap">
     <p class="kicker">Кабинет</p>
     <h1>Избранное</h1>
-</div>
-<div class="wrap">
+  </div>
+  {% include 'includes/fork.html' %}
+</header>
+<div class="wrap page-body">
     {% include 'includes/account_nav.html' with active='favorites' %}
     <div class="catalog-list">
         {% for f in favorites %}

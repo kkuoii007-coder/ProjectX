@@ -47,6 +47,13 @@ class Publication(models.Model):
         HIDDEN = "hidden"
         WITHDRAWN = "withdrawn"
 
+    class CoverTone(models.TextChoices):
+        """The closed cover palette: three tones, one per question."""
+
+        CLAY = "clay"
+        SEA = "sea"
+        OLIVE = "olive"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     slug = models.SlugField(unique=True)
     revision = models.OneToOneField("workshop.Revision", on_delete=models.PROTECT, related_name="publication")
@@ -57,6 +64,8 @@ class Publication(models.Model):
     topics = models.ManyToManyField(Topic, blank=True, related_name="publications")
     published_at = models.DateTimeField(null=True, blank=True)
     published_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="published_materials")
+    # Presentation only: the colour of the cover and of the reader head.
+    cover_tone = models.CharField(max_length=8, choices=CoverTone.choices, default=CoverTone.CLAY)
 
     @property
     def title(self):

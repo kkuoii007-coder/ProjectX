@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{# The reading path: plain English lines with small Russian captions (.ru-ui). #}
+{% block html_lang %}en{% endblock %}
+{% block theme_color %}{% if tone == 'sea' %}#1f4d5c{% elif tone == 'olive' %}#4a5626{% else %}#8a3a26{% endif %}{% endblock %}
+{% block cover_tone %}{{ tone|default:'clay' }}{% endblock %}
+{% block title %}Philosophy Reader — big questions in simple English{% endblock %}
+{% block description %}Big questions in simple English. For adult beginners. Tap a sentence for Russian.{% endblock %}
+{% block head_script %}<script>(function(r,d){r.className+=' js';try{if(localStorage.getItem('pr-ui-ru')==='off'){r.className+=' ui-ru-off'}}catch(e){}function back(){if(!r.hasAttribute('data-js-ready')){r.classList.remove('js','ui-ru-off')}}d.addEventListener('DOMContentLoaded',back);setTimeout(back,3000)})(document.documentElement,document)</script>{% endblock %}
+{% block skip_link %}<a class="skip-link" href="#main">Skip to the text</a>{% endblock %}
+{% block site_header %}
+<header class="site-header" id="site-header">
+  <div class="wrap site-header__inner">
+    <a class="brand" href="{% url 'library:home' %}">Philosophy Reader</a>
+    <button class="ru-toggle" type="button" data-ru-toggle aria-pressed="true" aria-label="Russian captions" title="Russian captions / Русские подписи" hidden><span class="ru-toggle__chip">RU</span></button>
+  </div>
+</header>
+{% endblock %}
+{% block site_footer %}
+<footer class="site-footer">
+  <div class="wrap site-footer__inner">
+    <p class="site-footer__mark">Philosophy Reader</p>
+    <nav class="site-footer__nav" aria-label="Site">
+      <a href="{% url 'library:library' %}"{% if request.resolver_match.url_name == 'library' %} aria-current="page"{% endif %}>Library<span class="ru-ui" lang="ru">Библиотека</span></a>
+      {% if user.is_authenticated %}<a href="{% url 'account:dashboard' %}">My account<span class="ru-ui" lang="ru">Кабинет</span></a>{% else %}<a href="{% url 'accounts:login' %}">Log in<span class="ru-ui" lang="ru">Войти</span></a>{% endif %}
+    </nav>
+    <p class="site-footer__note">These texts are a first step into philosophy. They can have mistakes.<span class="ru-ui" lang="ru">Материалы предназначены для знакомства с философией и не гарантируют отсутствия ошибок.</span></p>
+    <p class="site-footer__colophon">Set in Literata and Golos Text (SIL Open Font License).<span class="ru-ui" lang="ru">Набрано шрифтами Literata и Golos Text (SIL Open Font License).</span></p>
+  </div>
+</footer>
+{% endblock %}
