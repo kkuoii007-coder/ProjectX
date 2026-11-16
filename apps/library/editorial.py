@@ -13,6 +13,8 @@ import hashlib
 import json
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_slug
 from django.db import transaction
 from django.utils import timezone
 
@@ -61,6 +63,16 @@ def canonical_hash(value):
 
 def _is_text(value, limit):
     return isinstance(value, str) and bool(value.strip()) and len(value) <= limit
+
+
+def _is_slug(value):
+    if not isinstance(value, str) or not 0 < len(value) <= 50:
+        return False
+    try:
+        validate_slug(value)
+    except ValidationError:
+        return False
+    return True
 
 
 def _check_pair(pair, where, errors):
@@ -217,8 +229,10 @@ def load_card(data, *, actor="cli"):
     facts, pitfalls = data.get("facts"), data.get("pitfalls", [])
     verification = data.get("verification") or {}
     errors = []
-    if not isinstance(slug, str) or not slug or not isinstance(version, int) or version < 1:
-        errors.append("Карточка: нужны slug и целая version >= 1")
+    if not isinstance(verification, dict):
+        raise EditorialError("Карточка: verification должен быть объектом")
+    if not _is_slug(slug) or type(version) is not int or version < 1:
+        errors.append("Карточка: нужны slug (латиница, цифры, дефис; до 50 символов) и целая version >= 1")
     if not _is_text(title, MAX_TITLE_CHARS):
         errors.append("Карточка: пустой title")
     if not isinstance(facts, list) or not facts:
@@ -229,14 +243,17 @@ def load_card(data, *, actor="cli"):
             errors.append("Карточка: у каждого положения должен быть уникальный fact_id")
         if any(not isinstance(fact, dict) or not _is_text(fact.get("text"), 600) or not _is_text(fact.get("locator"), 80) for fact in facts):
             errors.append("Карточка: у каждого положения нужны text и locator (место в первоисточнике)")
+        if any(isinstance(fact, dict) and "type" in fact for fact in facts):
+            errors.append("Карточка: поле type в положении зарезервировано")
     if not isinstance(pitfalls, list) or any(not _is_text(p, 600) for p in pitfalls):
         errors.append("Карточка: pitfalls — список непустых строк")
     status = verification.get("status", KnowledgeCard.Status.DRAFT)
     if status not in (KnowledgeCard.Status.DRAFT, KnowledgeCard.Status.VERIFIED):
         errors.append("Карточка: verification.status — draft или verified")
     sources = data.get("sources") or []
-    if not isinstance(sources, list) or any(not isinstance(source, dict) or not _is_text(source.get("title"), 300) for source in sources):
-        errors.append("Карточка: sources — список объектов с title")
+    if not isinstance(sources, list) or any(not isinstance(source, dict) or not _is_text(source.get("title"), 300) or "type" in source for source in sources):
+        errors.append("Карточка: sources — список объектов с title (поле type зарезервировано)")
+        sources = []
     if status == KnowledgeCard.Status.VERIFIED and not (verification.get("method") and verification.get("checked_on") and sources):
         errors.append("Карточка: для verified нужны sources, verification.method и verification.checked_on")
     if errors:
@@ -244,7 +261,7 @@ def load_card(data, *, actor="cli"):
 
     # The card model has one JSON list: sources and facts are stored in it
     # as typed entries, so the checked URLs stay with the card.
-    facts_json = [{"type": "source", **source} for source in data.get("sources") or []] + [{"type": "fact", **fact} for fact in facts]
+    facts_json = [{"type": "source", **source} for source in sources] + [{"type": "fact", **fact} for fact in facts]
     with transaction.atomic():
         card = KnowledgeCard.objects.select_for_update().filter(slug=slug, version=version).first()
         if card is not None:
@@ -284,13 +301,18 @@ def editorial_owner():
     owner = User.objects.filter(login=EDITORIAL_LOGIN).first()
     if owner is None:
         owner = User.objects.create_user(login=EDITORIAL_LOGIN, password=None, is_active=False)
+    if owner.is_active or owner.has_usable_password():
+        # Never file editorial texts under an account somebody can log into.
+        raise EditorialError(f"Учётная запись {EDITORIAL_LOGIN} должна быть неактивной и без пароля")
     return owner
 
 
 def editorial_project(slug):
-    project, _ = Project.objects.get_or_create(
-        owner=editorial_owner(), title=f"Editorial: {slug}"[:200], mode=Project.Mode.EXPLAIN
-    )
+    owner = editorial_owner()
+    title = f"Editorial: {slug}"[:200]
+    project = Project.objects.filter(owner=owner, title=title).order_by("created_at").first()
+    if project is None:
+        project = Project.objects.create(owner=owner, title=title, mode=Project.Mode.EXPLAIN)
     return project
 
 
@@ -305,15 +327,8 @@ def submit_text(data, *, actor="cli"):
     if not isinstance(data, dict) or data.get("schema") != TEXT_SCHEMA:
         raise EditorialError(f"Текст: ожидается schema={TEXT_SCHEMA}")
     slug = data.get("slug")
-    from django.core.validators import validate_slug
-    from django.core.exceptions import ValidationError
-
-    try:
-        validate_slug(slug)
-    except (ValidationError, TypeError):
-        raise EditorialError("Текст: slug — латинские буквы, цифры, дефис и подчёркивание")
-    if len(slug) > 50:
-        raise EditorialError("Текст: slug длиннее 50 символов")
+    if not _is_slug(slug):
+        raise EditorialError("Текст: slug — латинские буквы, цифры, дефис и подчёркивание, до 50 символов")
     payload = data.get("payload")
     errors, _ = check_editorial_payload(payload)
     card_refs = data.get("knowledge_cards") or []
@@ -327,6 +342,8 @@ def submit_text(data, *, actor="cli"):
                 errors.append(f"Карточка не найдена: {ref}")
             else:
                 cards.append(card)
+        if len({card.slug for card in cards}) != len(cards):
+            errors.append("Текст: одна карточка указана в двух версиях")
     if errors:
         raise EditorialError(errors)
 
@@ -340,8 +357,26 @@ def submit_text(data, *, actor="cli"):
         if project.head_revision_id != revision.pk:
             project.head_revision = revision
             project.save(update_fields=["head_revision"])
+        # The revision's cards are exactly the ones named in the file. A
+        # changed list makes earlier quality reports stale (the gate compares
+        # the card versions a report was made with).
+        wanted = {card.pk for card in cards}
+        stale = RevisionKnowledgeCard.objects.filter(revision=revision).exclude(knowledge_card__in=wanted)
+        removed = [f"{link.knowledge_card.slug}:v{link.knowledge_card.version}" for link in stale.select_related("knowledge_card")]
+        stale.delete()
+        added = []
         for card in cards:
-            RevisionKnowledgeCard.objects.get_or_create(revision=revision, knowledge_card=card)
+            _, linked = RevisionKnowledgeCard.objects.get_or_create(revision=revision, knowledge_card=card)
+            if linked and not created:
+                added.append(f"{card.slug}:v{card.version}")
+        if removed or added:
+            AuditEvent.objects.create(
+                actor_reference=actor,
+                action="editorial_cards_changed",
+                object_reference=f"revision:{revision.pk}",
+                reason="Список карточек ревизии изменён при подаче; нужна новая проверка",
+                sanitized_metadata={"removed": removed, "added": added},
+            )
         if created:
             AuditEvent.objects.create(
                 actor_reference=actor,

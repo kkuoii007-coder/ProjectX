@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.ai.models import QualityReport
+from apps.library.editorial import card_version_records
 from apps.library.models import Collection, CollectionItem, KnowledgeCard, Publication, Thinker, Topic
 from apps.library.services import publish_revision
 from apps.workshop.models import Project, RevisionKnowledgeCard
@@ -29,7 +30,14 @@ def publish_demo_fixture():
     )
     RevisionKnowledgeCard.objects.get_or_create(revision=revision, knowledge_card=card)
     QualityReport.objects.get_or_create(
-        revision=revision, revision_content_hash=revision.content_hash, defaults={"factual_state": "supported"}
+        revision=revision,
+        revision_content_hash=revision.content_hash,
+        defaults={
+            "factual_state": "supported",
+            "eligibility_state": "eligible",
+            "review_json": {"verdict": "pass", "issues": []},
+            "card_versions_json": card_version_records(revision),
+        },
     )
     thinker = Thinker.objects.get(slug="socrates")
     publication, _ = publish_revision(revision=revision, admin=admin, slug="socrates-questions", thinker=thinker)

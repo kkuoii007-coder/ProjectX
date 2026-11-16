@@ -7,6 +7,7 @@ QualityReport for real content by hand; the report comes from the worker.
 
 import copy
 import json
+import tempfile
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
@@ -21,6 +22,7 @@ from django.urls import reverse
 from apps.accounts.models import User
 from apps.ai.models import AIJob, ProviderAttempt, QualityReport
 from apps.ai.services import ReviewNotAllowed, claim_job, create_review_job, execute_job
+from apps.accounts.forms import RegisterForm
 from apps.credits.models import BudgetBucket, CreditTransaction
 from apps.library.editorial import EditorialError, canonical_hash, check_editorial_payload, load_card, submit_text
 from apps.library.models import KnowledgeCard, Publication
@@ -180,14 +182,45 @@ class SubmitTests(EditorialBase):
             publish_revision(revision=second, admin=self.admin, slug="what-does-it-mean-to-be-brave")
         self.assertIn("Нет QualityReport", str(blocked.exception))
 
+    def test_resubmission_with_a_new_card_version_replaces_the_link_and_stales_the_report(self):
+        revision, _ = self.submit()
+        run_review(revision)
+        newer = card_data()
+        newer["version"] = 2
+        newer["pitfalls"].append("Do not date the conversation.")
+        load_card(newer, actor="test")
+        data = text_data()
+        data["knowledge_cards"] = [{"slug": "plato-laches-courage", "version": 2}]
+        same, created = submit_text(data, actor="test")
+        self.assertFalse(created)
+        self.assertEqual(same.pk, revision.pk)
+        linked = [(link.knowledge_card.slug, link.knowledge_card.version) for link in RevisionKnowledgeCard.objects.filter(revision=revision)]
+        self.assertEqual(linked, [("plato-laches-courage", 2)])
+        self.assertTrue(AuditEvent.objects.filter(action="editorial_cards_changed").exists())
+        with self.assertRaises(PublicationBlocked) as blocked:
+            publish_revision(revision=revision, admin=self.admin, slug="what-does-it-mean-to-be-brave")
+        self.assertIn("нужна новая проверка", str(blocked.exception))
+        data["knowledge_cards"].append({"slug": "plato-laches-courage", "version": 1})
+        with self.assertRaises(EditorialError):
+            submit_text(data, actor="test")  # two versions of one card
+
+    def test_editorial_account_must_stay_inactive(self):
+        owner = User.objects.create_user(login="editorial", password="TestPassword123!")
+        self.assertTrue(owner.is_active)
+        load_card(card_data(), actor="test")
+        with self.assertRaises(EditorialError):
+            submit_text(text_data(), actor="test")
+        self.assertEqual(Revision.objects.count(), 0)
+
     def test_submission_needs_a_known_card_and_a_valid_slug(self):
         with self.assertRaises(EditorialError):
             submit_text(text_data(), actor="test")  # card not loaded
         load_card(card_data(), actor="test")
         data = text_data()
-        data["slug"] = "what does it mean?"
-        with self.assertRaises(EditorialError):
-            submit_text(data, actor="test")
+        for bad in ("what does it mean?", None, 7, "x" * 51):
+            data["slug"] = bad
+            with self.subTest(slug=bad), self.assertRaises(EditorialError):
+                submit_text(data, actor="test")
         self.assertEqual(Revision.objects.count(), 0)
 
 
@@ -221,6 +254,19 @@ class CardTests(TestCase):
         with self.assertRaises(EditorialError):
             load_card(data, actor="test")
 
+    def test_card_file_is_validated(self):
+        for change in (
+            {"slug": "x" * 51},
+            {"slug": "not a slug"},
+            {"version": True},
+            {"version": 0},
+            {"verification": "verified"},
+            {"facts": [{"fact_id": "a", "locator": "190e", "text": "T", "type": "source"}]},
+        ):
+            with self.subTest(change=change), self.assertRaises(EditorialError):
+                load_card({**card_data(), **change}, actor="test")
+        self.assertFalse(KnowledgeCard.objects.exists())
+
 
 class ReviewTests(EditorialBase):
     def test_reviewer_gets_text_and_verified_card_and_changes_nothing(self):
@@ -233,7 +279,7 @@ class ReviewTests(EditorialBase):
         self.assertEqual(call["cards"][0]["slug"], "plato-laches-courage")
         self.assertEqual(len(call["cards"][0]["facts"]), 10)
         self.assertTrue(call["cards"][0]["pitfalls"])
-        self.assertTrue(call["cards"][0]["sources"][0]["url"].startswith("https://scaife.perseus.org/"))
+        self.assertTrue(call["cards"][0]["sources"][0]["url"].startswith("https://www.perseus.tufts.edu/"))
         # Remarks are stored in Russian; the text is the same revision, unchanged.
         report = QualityReport.objects.get(revision=revision)
         self.assertEqual(report.review_json["issues"][0]["reason_ru"], "Утверждение шире источника.")
@@ -296,6 +342,50 @@ class ReviewTests(EditorialBase):
         self.assertEqual(report.factual_state, "unverified")
         self.assertEqual(report.eligibility_state, "ineligible")
 
+    def test_review_fields_of_the_wrong_type_are_not_dropped_silently(self):
+        revision, _ = self.submit()
+        for broken in (
+            {**PASS_REVIEW, "issues": "BLOCKING: the text misquotes Plato"},
+            {**PASS_REVIEW, "issues": ["the text misquotes Plato"]},
+            {**PASS_REVIEW, "unsupported_claims": "everything"},
+            {**PASS_REVIEW, "translation_issues": [{"ru": "x"}]},
+            "pass",
+        ):
+            with self.subTest(review=broken):
+                QualityReport.objects.all().delete()
+                run_review(revision, broken)
+                report = QualityReport.objects.get(revision=revision)
+                self.assertEqual(report.review_json["verdict"], "fail")
+                self.assertEqual(report.review_json["issues"][0]["code"], "malformed_review")
+                self.assertEqual(report.eligibility_state, "ineligible")
+                with self.assertRaises(PublicationBlocked):
+                    publish_revision(revision=revision, admin=self.admin, slug="what-does-it-mean-to-be-brave")
+
+    def test_unknown_severity_counts_as_blocking(self):
+        revision, _ = self.submit()
+        run_review(revision, {**PASS_REVIEW, "issues": [{"code": "x", "severity": "critical", "reason_ru": "Ошибка."}]})
+        report = QualityReport.objects.get(revision=revision)
+        self.assertEqual(report.review_json["issues"][0]["severity"], "blocking")
+        self.assertEqual(report.eligibility_state, "ineligible")
+
+    def test_blocking_remark_beyond_the_stored_cap_is_kept(self):
+        revision, _ = self.submit()
+        issues = [{"code": f"n{i}", "severity": "nonblocking", "reason_ru": "Стиль."} for i in range(25)]
+        issues.append({"code": "last", "severity": "blocking", "reason_ru": "Ошибка в конце списка."})
+        run_review(revision, {**PASS_REVIEW, "issues": issues})
+        report = QualityReport.objects.get(revision=revision)
+        self.assertEqual(len(report.review_json["issues"]), 20)
+        self.assertEqual(report.review_json["issues"][0]["code"], "last")
+        self.assertEqual(report.eligibility_state, "ineligible")
+
+    def test_unsupported_claims_make_the_report_ineligible(self):
+        revision, _ = self.submit()
+        run_review(revision, {**PASS_REVIEW, "unsupported_claims": [{"claim_text": "Laches is a soldier.", "reason": "Нет в карточке."}]})
+        self.assertEqual(QualityReport.objects.get(revision=revision).eligibility_state, "ineligible")
+        with self.assertRaises(PublicationBlocked) as blocked:
+            publish_revision(revision=revision, admin=self.admin, slug="what-does-it-mean-to-be-brave")
+        self.assertIn("eligibility_state=ineligible", str(blocked.exception))
+
     def test_provider_failure_fails_the_job_without_a_report(self):
         revision, _ = self.submit()
         job, _ = create_review_job(revision=revision, actor="test")
@@ -346,6 +436,65 @@ class PublicationTests(EditorialBase):
         self.assertIn("Нет проверенной карточки", str(blocked.exception))
         self.assertFalse(Publication.objects.exists())
 
+    def test_gate_needs_each_condition_on_its_own(self):
+        """One defect at a time in an otherwise clean report."""
+        revision, _ = self.submit()
+        run_review(revision)
+        report = QualityReport.objects.get(revision=revision)
+        clean = {"review_json": report.review_json, "factual_state": "supported", "eligibility_state": "eligible", "card_versions_json": report.card_versions_json}
+        blocking_issue = {"code": "x", "severity": "blocking", "reason_ru": "Ошибка."}
+        defects = {
+            "verdict=repair": {"review_json": {**report.review_json, "verdict": "repair"}},
+            "verdict=None": {"review_json": {"issues": []}},
+            "блокирующие замечания": {"review_json": {**report.review_json, "issues": [blocking_issue]}},
+            "factual_state=mixed": {"factual_state": "mixed"},
+            "eligibility_state=ineligible": {"eligibility_state": "ineligible"},
+            "без нынешних проверенных карточек": {"card_versions_json": []},
+        }
+        for expected, defect in defects.items():
+            with self.subTest(defect=expected):
+                QualityReport.objects.filter(pk=report.pk).update(**{**clean, **defect})
+                with self.assertRaises(PublicationBlocked) as blocked:
+                    publish_revision(revision=revision, admin=self.admin, slug=self.slug)
+                self.assertEqual(str(blocked.exception).count(";"), 0, str(blocked.exception))  # the only reason
+                self.assertIn(expected, str(blocked.exception))
+        self.assertFalse(Publication.objects.exists())
+        QualityReport.objects.filter(pk=report.pk).update(**clean)
+        self.assertTrue(publish_revision(revision=revision, admin=self.admin, slug=self.slug)[1])
+
+    def test_report_from_the_generation_cycle_does_not_publish(self):
+        """The generate -> review cycle gives the reviewer no cards, so its
+        report cannot open the gate even with a verified card linked later."""
+        revision, _ = self.submit()
+        QualityReport.objects.create(
+            revision=revision, revision_content_hash=revision.content_hash,
+            review_json={"verdict": "pass", "factual_state": "supported", "issues": []},
+            factual_state="supported", eligibility_state="ineligible",
+        )
+        with self.assertRaises(PublicationBlocked):
+            publish_revision(revision=revision, admin=self.admin, slug=self.slug)
+
+    def test_one_text_has_one_address(self):
+        first, _ = self.submit()
+        run_review(first)
+        publish_revision(revision=first, admin=self.admin, slug=self.slug)
+        edited = text_data()
+        edited["payload"]["parts"][0]["sentences"][3]["ru"] = "Он очень хорошо знает войну."
+        second, _ = self.submit(edited)
+        run_review(second)
+        with self.assertRaises(PublicationBlocked) as blocked:
+            publish_revision(revision=second, admin=self.admin, slug="a-second-address")
+        self.assertIn("адрес не меняется", str(blocked.exception))
+        self.assertEqual(Publication.objects.count(), 1)
+        self.assertEqual(Publication.objects.get().revision_id, first.pk)
+
+    def test_address_must_be_a_string_slug(self):
+        revision, _ = self.submit()
+        run_review(revision)
+        for bad in (None, 5, "", "x" * 51, "what does it mean"):
+            with self.subTest(slug=bad), self.assertRaises(PublicationBlocked):
+                publish_revision(revision=revision, admin=self.admin, slug=bad)
+
     def test_gate_rejects_a_report_made_with_a_different_card(self):
         revision, _ = self.submit()
         run_review(revision)
@@ -366,11 +515,13 @@ class PublicationTests(EditorialBase):
         publication.refresh_from_db()
         self.assertEqual(publication.revision_id, first.pk)  # readers still see the reviewed text
 
-        run_review(second)
+        job, _ = run_review(second)
         republished, changed = publish_revision(revision=second, admin=self.admin, slug=self.slug)
         self.assertTrue(changed)
         self.assertEqual(republished.pk, publication.pk)
         self.assertEqual(republished.revision_id, second.pk)
+        self.assertEqual(republished.quality_report_id, job.result_reference["quality_report_id"])  # the new report
+        self.assertEqual(republished.quality_report.revision_id, second.pk)
         self.assertEqual(Publication.objects.count(), 1)
         self.assertTrue(AuditEvent.objects.filter(action="editorial_republish").exists())
         self.assertContains(self.client.get(reverse("library:read", args=[self.slug])), "В конце Сократ говорит")
@@ -416,6 +567,38 @@ class AdminTests(EditorialBase):
 
     def test_publication_cannot_be_created_by_hand(self):
         self.assertEqual(self.client.get("/admin/library/publication/add/").status_code, 403)
+
+    def test_quality_report_is_read_only_in_admin(self):
+        revision, _ = self.submit()
+        run_review(revision, BLOCKING_REVIEW)
+        report = QualityReport.objects.get()
+        self.assertEqual(self.client.get("/admin/ai/qualityreport/add/").status_code, 403)
+        url = f"/admin/ai/qualityreport/{report.pk}/change/"
+        self.assertEqual(self.client.get(url).status_code, 200)  # viewable
+        response = self.client.post(url, {"factual_state": "supported", "eligibility_state": "eligible", "review_json": '{"verdict": "pass"}'})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.client.post(f"/admin/ai/qualityreport/{report.pk}/delete/", {"post": "yes"}).status_code, 403)
+        report.refresh_from_db()
+        self.assertEqual((report.factual_state, report.eligibility_state), ("mixed", "ineligible"))
+
+    def test_withdrawn_publication_cannot_be_reopened_from_the_change_form(self):
+        revision, _ = self.submit()
+        run_review(revision)
+        publication, _ = publish_revision(revision=revision, admin=self.admin, slug="what-does-it-mean-to-be-brave")
+        self.client.post("/admin/library/publication/", {"action": "withdraw_action", "_selected_action": [str(publication.pk)]})
+        url = f"/admin/library/publication/{publication.pk}/change/"
+        self.assertNotContains(self.client.get(url), 'name="status"')
+        self.client.post(url, {"status": "published", "thinker": "", "_save": "Save"})
+        publication.refresh_from_db()
+        self.assertEqual(publication.status, Publication.Status.WITHDRAWN)
+        self.assertEqual(self.client.get("/read/what-does-it-mean-to-be-brave/").status_code, 404)
+
+    def test_card_content_is_read_only_in_admin(self):
+        card, _ = load_card(card_data(), actor="test")
+        page = self.client.get(f"/admin/library/knowledgecard/{card.pk}/change/")
+        self.assertNotContains(page, 'name="facts_json"')
+        self.assertNotContains(page, 'name="pitfalls_json"')
+        self.assertContains(page, 'name="verification_status"')
 
     def test_review_and_publish_actions_are_offered_for_revisions(self):
         revision, _ = self.submit()
@@ -476,6 +659,31 @@ class CommandTests(EditorialBase):
         self.assertIn("[БЛОКИРУЕТ] 2 8: Утверждение шире источника.", out)
         self.assertIn("Отчёт не допускает публикацию", out)
         self.assertEqual(Revision.objects.get().payload, text_data()["payload"])
+
+    def test_commands_republish_an_edited_file_under_the_same_address(self):
+        self.run_command("submit_text", str(TEXT_FILE))
+        with patch("apps.ai.services.get_provider", return_value=StubReviewer(PASS_REVIEW)):
+            self.run_command("review_text", str(TEXT_FILE), "--inline")
+        self.run_command("publish_text", str(TEXT_FILE))
+        edited = text_data()
+        edited["payload"]["parts"][0]["sentences"][3]["ru"] = "Он очень хорошо знает войну."
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "edited.json"
+            path.write_text(json.dumps(edited, ensure_ascii=False), encoding="utf-8")
+            self.run_command("submit_text", str(path))
+            with self.assertRaises(CommandError):
+                self.run_command("publish_text", str(path))  # edited: needs a new review
+            with patch("apps.ai.services.get_provider", return_value=StubReviewer(PASS_REVIEW)):
+                self.run_command("review_text", str(path), "--inline")
+            out = self.run_command("publish_text", str(path))
+        self.assertIn("Опубликовано: /read/what-does-it-mean-to-be-brave/", out)
+        publication = Publication.objects.get()
+        self.assertEqual(publication.revision.payload["parts"][0]["sentences"][3]["ru"], "Он очень хорошо знает войну.")
+
+    def test_editorial_login_cannot_be_registered(self):
+        form = RegisterForm({"login": "editorial", "password": "TestPassword123!", "password_confirm": "TestPassword123!", "no_recovery_ack": "on"})
+        self.assertFalse(form.is_valid())
+        self.assertIn("login", form.errors)
 
     def test_seed_demo_no_longer_publishes(self):
         self.run_command("seed_demo")
@@ -546,6 +754,33 @@ class LiveProviderContractTests(EditorialBase):
         ):
             provider.review({"parts": []}, job)
         self.assertEqual(BudgetBucket.objects.order_by("period").first().consumed_usd, Decimal("0.001000"))
+
+    def test_exhausted_budget_stops_the_review_before_any_call(self):
+        revision, _ = self.submit()
+        job, _ = create_review_job(revision=revision, actor="test")
+        # Worst case of one call at these prices is 60000*0.0000001 + 8000*0.0000005 = 0.01.
+        with override_settings(OWNER_DAILY_BUDGET_USD="0.005"), patch(
+            "apps.ai.openrouter._pricing_for", side_effect=lambda model: PRICES[model]
+        ), patch("apps.ai.openrouter._chat_completion") as chat:
+            execute_job(claim_job(job))
+        job.refresh_from_db()
+        self.assertEqual((job.status, job.error_code), (AIJob.Status.FAILED, "budget_exhausted"))
+        chat.assert_not_called()
+        self.assertFalse(QualityReport.objects.exists())
+
+    def test_paid_call_with_unreadable_answer_is_still_recorded(self):
+        revision, _ = self.submit()
+        job, _ = create_review_job(revision=revision, actor="test")
+        bad = ({"id": "gen-2", "usage": {"prompt_tokens": 5000, "completion_tokens": 1000}, "choices": [{"message": {"content": "not json"}}]}, 0.5)
+        with patch("apps.ai.openrouter._pricing_for", side_effect=lambda model: PRICES[model]), patch(
+            "apps.ai.openrouter._chat_completion", return_value=bad
+        ):
+            execute_job(claim_job(job))
+        job.refresh_from_db()
+        self.assertEqual((job.status, job.error_code), (AIJob.Status.FAILED, "provider_error"))
+        attempt = ProviderAttempt.objects.get(job=job)
+        self.assertEqual((attempt.state, attempt.cost_usd), ("failed", Decimal("0.001000")))
+        self.assertFalse(QualityReport.objects.exists())
 
     def test_review_without_budget_fails_before_any_call(self):
         revision, _ = self.submit()

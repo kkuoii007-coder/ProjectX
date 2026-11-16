@@ -6,8 +6,8 @@
   "sources": [
     {
       "title": "Plato, Laches. English translation by W. R. M. Lamb (Loeb Classical Library), Perseus Digital Library",
-      "url": "https://scaife.perseus.org/reader/urn:cts:greekLit:tlg0059.tlg019.perseus-eng2:190e/",
-      "sections": "190d–192d, 199e–201c"
+      "url": "https://www.perseus.tufts.edu/hopper/text?doc=Perseus%3Atext%3A1999.01.0176%3Atext%3DLach.%3Asection%3D190e",
+      "sections": "190d–192c, 199e"
     }
   ],
   "facts": [
@@ -36,6 +36,6 @@
     "status": "verified",
     "method": "ai",
     "checked_on": "2026-11-16",
-    "note_ru": "Положения сверены ИИ с английским переводом У. Лэмба (Perseus, разделы 190d–192d и 199e–201c). Человек карточку не вычитывал: решение владельца от 16.11.2026."
+    "note_ru": "Положения и номера разделов сверены ИИ с английским переводом У. Лэмба (Perseus, разделы 190d–192c и 199e). Человек карточку не вычитывал: решение владельца от 16.11.2026."
   }
 }

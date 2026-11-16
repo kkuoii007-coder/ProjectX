@@ -1,6 +1,7 @@
 import hashlib
 import json
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
@@ -157,7 +158,7 @@ def claim_job(job):
             return None
         locked.status = AIJob.Status.RUNNING
         locked.lease_token = uuid.uuid4().hex
-        locked.lease_until = timezone.now() + timezone.timedelta(seconds=settings.AI_LEASE_SECONDS)
+        locked.lease_until = timezone.now() + timedelta(seconds=settings.AI_LEASE_SECONDS)
         locked.save(update_fields=["status", "lease_token", "lease_until", "updated_at"])
         return locked
 
@@ -168,18 +169,35 @@ FACTUAL_STATES = ("supported", "mixed", "unsupported", "unverified")
 
 def _clean_review(review):
     """The reviewer's answer is untrusted data: keep only the known shape.
-    Anything unexpected degrades to the non-publishable side."""
-    review = review if isinstance(review, dict) else {}
 
-    def strings(key, limit=20):
-        return [str(item)[:500] for item in (review.get(key) or []) if isinstance(item, str)][:limit]
+    Anything unexpected degrades to the non-publishable side. A field of
+    the wrong type is never dropped silently: the verdict becomes "fail"
+    and a blocking remark records why. Blocking remarks are kept first, so
+    the stored cap of 20 cannot hide one.
+    """
+    malformed = []
+    if not isinstance(review, dict):
+        review, malformed = {}, ["ответ не является объектом"]
 
+    def strings(key):
+        value = review.get(key) or []
+        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+            malformed.append(f"поле {key} имеет неверный вид")
+            return []
+        return [item[:500] for item in value][:20]
+
+    raw_issues = review.get("issues") or []
+    if not isinstance(raw_issues, list):
+        malformed.append("поле issues не является списком")
+        raw_issues = []
     issues = []
-    for issue in (review.get("issues") or [])[:20]:
+    for issue in raw_issues:
         if not isinstance(issue, dict):
+            malformed.append("замечание в issues не является объектом")
             continue
         cleaned = {
             "code": str(issue.get("code", ""))[:60],
+            # Only an explicit "nonblocking" is non-blocking.
             "severity": "nonblocking" if issue.get("severity") == "nonblocking" else "blocking",
             "reason_ru": str(issue.get("reason_ru", ""))[:500],
         }
@@ -187,22 +205,69 @@ def _clean_review(review):
             if issue.get(key):
                 cleaned[key] = str(issue[key])[:500]
         issues.append(cleaned)
+    raw_claims = review.get("unsupported_claims") or []
+    if not isinstance(raw_claims, list) or any(not isinstance(claim, dict) for claim in raw_claims):
+        malformed.append("поле unsupported_claims имеет неверный вид")
+        raw_claims = []
     claims = [
         {"claim_text": str(claim.get("claim_text", ""))[:400], "reason": str(claim.get("reason", ""))[:400]}
-        for claim in (review.get("unsupported_claims") or [])[:20]
-        if isinstance(claim, dict)
+        for claim in raw_claims[:20]
     ]
+    language_notes, translation_issues, uncertainty_notes = strings("language_notes"), strings("translation_issues"), strings("uncertainty_notes")
     verdict = review.get("verdict")
     factual_state = review.get("factual_state")
+    if verdict not in REVIEW_VERDICTS:
+        malformed.append("неизвестный verdict")
+    if factual_state not in FACTUAL_STATES:
+        malformed.append("неизвестный factual_state")
+    if malformed:
+        verdict = "fail"
+        issues.insert(0, {
+            "code": "malformed_review",
+            "severity": "blocking",
+            "reason_ru": ("Ответ проверяющей модели имеет неверную структуру: " + "; ".join(dict.fromkeys(malformed)))[:500],
+        })
+    issues.sort(key=lambda issue: issue["severity"] != "blocking")  # stable: blocking first
     return {
-        "verdict": verdict if verdict in REVIEW_VERDICTS else "fail",
+        "verdict": verdict,
         "factual_state": factual_state if factual_state in FACTUAL_STATES else "unverified",
-        "issues": issues,
+        "issues": issues[:20],
         "unsupported_claims": claims,
-        "language_notes": strings("language_notes"),
-        "translation_issues": strings("translation_issues"),
-        "uncertainty_notes": strings("uncertainty_notes"),
+        "language_notes": language_notes,
+        "translation_issues": translation_issues,
+        "uncertainty_notes": uncertainty_notes,
     }
+
+
+def _review_is_eligible(review):
+    """A cleaned review allows publication only when nothing is open."""
+    return (
+        review["verdict"] == "pass"
+        and review["factual_state"] == "supported"
+        and not any(issue["severity"] == "blocking" for issue in review["issues"])
+        and not review["unsupported_claims"]
+    )
+
+
+def _save_provider_attempts(job, provider, state):
+    """Every paid call leaves a ProviderAttempt row, also when the job fails
+    after the call (for example on an unreadable answer)."""
+    from .models import ProviderAttempt
+
+    for stage_number, attempt in enumerate(getattr(provider, "_attempts", None) or [], start=1):
+        ProviderAttempt.objects.create(
+            job=job,
+            stage_number=stage_number,
+            request_hash=attempt["request_hash"],
+            state=state,
+            provider_request_id=attempt["provider_request_id"] or "",
+            model=attempt["model"],
+            provider="openrouter",
+            usage_json=attempt["usage_json"],
+            cost_usd=attempt.get("cost_usd"),
+            sent_at=timezone.now(),
+            completed_at=timezone.now(),
+        )
 
 
 def _execute_review_job(job):
@@ -213,9 +278,10 @@ def _execute_review_job(job):
     """
     from apps.library.editorial import card_snapshot, card_version_record, check_editorial_payload, verified_cards
 
-    from .models import ProviderAttempt, QualityReport
+    from .models import QualityReport
 
     revision = job.base_revision
+    provider = None
     try:
         if revision is None:
             raise ReviewNotAllowed("Ревизия для проверки недоступна")
@@ -230,6 +296,7 @@ def _execute_review_job(job):
         review = _clean_review(provider.review_revision(revision.payload, [card_snapshot(card) for card in cards], job))
     except Exception as exc:
         with transaction.atomic():
+            _save_provider_attempts(job, provider, "failed")
             job.status = AIJob.Status.FAILED
             job.outcome = None
             job.error_code = getattr(exc, "code", "provider_unavailable")
@@ -239,7 +306,6 @@ def _execute_review_job(job):
         return job
     attempts = getattr(provider, "_attempts", None) or []
     blocking = [issue for issue in review["issues"] if issue["severity"] == "blocking"]
-    eligible = review["verdict"] == "pass" and review["factual_state"] == "supported" and not blocking
     with transaction.atomic():
         report = QualityReport.objects.create(
             revision=revision,
@@ -251,22 +317,9 @@ def _execute_review_job(job):
             schema_version="review-1",
             card_versions_json=[card_version_record(card) for card in cards],
             factual_state=review["factual_state"],
-            eligibility_state="eligible" if eligible else "ineligible",
+            eligibility_state="eligible" if _review_is_eligible(review) else "ineligible",
         )
-        for stage_number, attempt in enumerate(attempts, start=1):
-            ProviderAttempt.objects.create(
-                job=job,
-                stage_number=stage_number,
-                request_hash=attempt["request_hash"],
-                state="completed",
-                provider_request_id=attempt["provider_request_id"] or "",
-                model=attempt["model"],
-                provider="openrouter",
-                usage_json=attempt["usage_json"],
-                cost_usd=attempt.get("cost_usd"),
-                sent_at=timezone.now(),
-                completed_at=timezone.now(),
-            )
+        _save_provider_attempts(job, provider, "completed")
         job.status = AIJob.Status.SUCCEEDED
         job.outcome = AIJob.Outcome.DELIVERED
         job.stage = "finalize"
@@ -467,6 +520,18 @@ def _build_edit_context(job):
 def execute_job(job):
     if job.kind == AIJob.Kind.REVIEW:
         return _execute_review_job(job)
+    if job.kind == AIJob.Kind.ASK and not settings.ASK_ENABLED:
+        # A question queued before the switch was turned off: no provider
+        # call, the reservation is released, nothing is charged.
+        with transaction.atomic():
+            settle_reservation(job=job, charge=False)
+            job.status = AIJob.Status.FAILED
+            job.outcome = None
+            job.error_code = AskDisabled.code
+            job.result_reference = {"message": "Вопросы по тексту пока выключены"}
+            job.completed_at = timezone.now()
+            job.save()
+        return job
     provider = get_provider()
     is_edit = job.kind in (AIJob.Kind.EDIT_SENTENCE, AIJob.Kind.EDIT_PART, AIJob.Kind.EDIT_SERIES)
     try:

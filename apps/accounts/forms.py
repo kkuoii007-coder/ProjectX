@@ -32,7 +32,8 @@ class RegisterForm(forms.Form):
         login = self.cleaned_data["login"].lower()
         if not re.fullmatch(r"[a-z0-9_]{4,32}", login):
             raise ValidationError("Только строчные латинские буквы, цифры и подчёркивание")
-        if get_user_model().objects.filter(login_normalized=login).exists():
+        # "editorial" is the inactive system account that owns editorial texts.
+        if login == "editorial" or get_user_model().objects.filter(login_normalized=login).exists():
             raise ValidationError("Этот логин уже занят")
         return login
 

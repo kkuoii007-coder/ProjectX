@@ -11,7 +11,7 @@ import json
 
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_slug
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -62,16 +62,23 @@ def publish_revision(*, revision, admin, slug, thinker=None, reason=""):
         return existing, False
     reasons = []
     # 0. The address must be a real slug: anything else breaks every page
-    # that links to the text. It may only be reused by the same text.
+    # that links to the text. One text has one address: it cannot take the
+    # address of another text or get a second address of its own.
+    if not isinstance(slug, str):
+        raise PublicationBlocked("invalid_slug", "Адрес публикации не задан")
     try:
         validate_slug(slug)
     except ValidationError:
         raise PublicationBlocked("invalid_slug", f"Недопустимый адрес публикации: {slug!r}")
     if len(slug) > Publication._meta.get_field("slug").max_length:
         raise PublicationBlocked("invalid_slug", "Адрес публикации слишком длинный")
-    previous = Publication.objects.select_related("revision").filter(slug=slug).first()
-    if previous is not None and previous.revision.project_id != revision.project_id:
+    by_slug = Publication.objects.select_related("revision").filter(slug=slug).first()
+    if by_slug is not None and by_slug.revision.project_id != revision.project_id:
         raise PublicationBlocked("slug_taken", f"Адрес {slug} занят другим текстом")
+    # An earlier publication of the same text (any revision of the project).
+    previous = existing or Publication.objects.filter(revision__project=revision.project).order_by("-published_at").first()
+    if previous is not None and previous.slug != slug:
+        raise PublicationBlocked("slug_mismatch", f"Этот текст уже имеет адрес {previous.slug}; адрес не меняется")
     # 1. A quality report bound to the *current* content hash of this revision.
     report = QualityReport.objects.filter(
         revision=revision, revision_content_hash=revision.content_hash
@@ -97,16 +104,19 @@ def publish_revision(*, revision, admin, slug, thinker=None, reason=""):
         ]
         if blocking:
             reasons.append("В отчёте есть блокирующие замечания reviewer")
-        # A recorded verdict other than pass never publishes.
-        if review.get("verdict") and review.get("verdict") != "pass":
+        # The reviewer's verdict must be an explicit pass.
+        if review.get("verdict") != "pass":
             reasons.append(f"verdict={review.get('verdict')} не допускает публикацию")
-        # The report names the card versions the reviewer saw. If the
-        # verified cards of the revision differ now, the report is stale.
-        if report.card_versions_json:
-            from .editorial import card_version_records
+        # The report itself must say the revision is eligible: only a review
+        # that received the verified cards can state that.
+        if report.eligibility_state != "eligible":
+            reasons.append(f"eligibility_state={report.eligibility_state} не допускает публикацию")
+        # The report names the card versions the reviewer saw. A report made
+        # without cards, or with other cards than the revision has now, is stale.
+        from .editorial import card_version_records
 
-            if _card_key(report.card_versions_json) != _card_key(card_version_records(revision)):
-                reasons.append("Карточки знаний изменились после проверки: нужна новая проверка")
+        if not report.card_versions_json or _card_key(report.card_versions_json) != _card_key(card_version_records(revision)):
+            reasons.append("Отчёт сделан без нынешних проверенных карточек: нужна новая проверка")
     # 4. Source rights: every linked source document must be usable
     # (editorial corpus or rights_state allowed); unknown rights block.
     from apps.sources.models import SourceDocument
@@ -119,34 +129,37 @@ def publish_revision(*, revision, admin, slug, thinker=None, reason=""):
     if reasons:
         raise PublicationBlocked("publication_blocked", "; ".join(reasons))
 
-    # A withdrawn publication of this revision, or an earlier revision of
-    # the same text under this address, is restored/replaced in place.
-    target = existing or previous
-    if target is not None:
-        return _republish(target, revision=revision, report=report, admin=admin, reason=reason), True
-
-    with transaction.atomic():
-        publication = Publication.objects.create(
-            slug=slug,
-            revision=revision,
-            quality_report=report,
-            source_type="editorial",
-            status=Publication.Status.PUBLISHED,
-            thinker=thinker,
-            published_at=timezone.now(),
-            published_by=admin,
-        )
-        AuditEvent.objects.create(
-            actor_reference=f"admin:{admin.pk}",
-            action="editorial_publish",
-            object_reference=f"revision:{revision.pk}",
-            reason=reason[:255] or "Редакционная публикация по проверке качества",
-            sanitized_metadata={
-                "publication_slug": slug,
-                "revision_hash": revision.content_hash,
-                "quality_report": str(report.pk) if report else None,
-            },
-        )
+    # A withdrawn publication of this revision, or another revision of the
+    # same text, is restored/replaced in place under the same address. This
+    # includes going back to an older revision: it passes the same gate.
+    try:
+        if previous is not None:
+            return _republish(previous, revision=revision, report=report, admin=admin, reason=reason), True
+        with transaction.atomic():
+            publication = Publication.objects.create(
+                slug=slug,
+                revision=revision,
+                quality_report=report,
+                source_type="editorial",
+                status=Publication.Status.PUBLISHED,
+                thinker=thinker,
+                published_at=timezone.now(),
+                published_by=admin,
+            )
+            AuditEvent.objects.create(
+                actor_reference=f"admin:{admin.pk}",
+                action="editorial_publish",
+                object_reference=f"revision:{revision.pk}",
+                reason=reason[:255] or "Редакционная публикация по проверке качества",
+                sanitized_metadata={
+                    "publication_slug": slug,
+                    "revision_hash": revision.content_hash,
+                    "quality_report": str(report.pk) if report else None,
+                },
+            )
+    except IntegrityError:
+        # Two publish actions at once: the unique constraints let one win.
+        raise PublicationBlocked("publication_conflict", "Публикация этого текста уже выполняется; повторите действие")
     return publication, True
 
 
@@ -162,6 +175,7 @@ def _republish(publication, *, revision, report, admin, reason):
     """Point an existing publication at a newer, freshly gated revision of
     the same text. The address, favourites and reports stay with it."""
     with transaction.atomic():
+        publication = Publication.objects.select_for_update().get(pk=publication.pk)
         old_hash = publication.revision.content_hash
         publication.revision = revision
         publication.quality_report = report

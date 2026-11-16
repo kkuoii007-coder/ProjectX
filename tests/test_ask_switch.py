@@ -53,7 +53,26 @@ class AskBase(TestCase):
         self.assertEqual((wallet.total_credits, wallet.reserved_credits), (30, 0))
 
 
+@override_settings(ASK_ENABLED=False)
 class AskSwitchedOffTests(AskBase):
+    def test_switch_is_off_by_default(self):
+        from config.settings import base
+
+        self.assertFalse(base.ASK_ENABLED)
+
+    def test_question_queued_before_the_switch_is_not_answered_or_charged(self):
+        with override_settings(ASK_ENABLED=True):
+            job, _ = create_job(owner=self.user, kind=AIJob.Kind.ASK, idempotency_key="queued", instruction="Вопрос", project=self.project, base_revision=self.revision)
+        self.assertEqual(Wallet.objects.get(user=self.user).reserved_credits, 1)
+        with patch("apps.ai.services.get_provider") as provider:
+            execute_job(claim_next_job())
+        provider.assert_not_called()
+        job.refresh_from_db()
+        self.assertEqual((job.status, job.error_code), (AIJob.Status.FAILED, "ask_disabled"))
+        wallet = Wallet.objects.get(user=self.user)
+        self.assertEqual((wallet.total_credits, wallet.reserved_credits), (30, 0))
+        self.assertFalse(Message.objects.filter(project=self.project, kind="answer", job=job).exists())
+
     def test_project_opens_as_before_with_a_line_instead_of_the_form(self):
         response = self.client.get(reverse("workshop:project", args=[self.project.pk]))
         self.assertEqual(response.status_code, 200)

@@ -19,7 +19,9 @@ class CollectionAdmin(admin.ModelAdmin):
 class PublicationAdmin(admin.ModelAdmin):
     list_display = ("slug", "status", "source_type", "published_at")
     list_filter = ("status", "source_type")
-    readonly_fields = ("slug", "revision", "quality_report", "source_type", "published_at", "published_by")
+    # status is read-only too: a withdrawn text returns only through
+    # publish_revision, never by flipping the field back.
+    readonly_fields = ("slug", "revision", "quality_report", "source_type", "status", "published_at", "published_by")
     actions = ["withdraw_action"]
 
     def has_add_permission(self, request):
@@ -42,6 +44,11 @@ class PublicationAdmin(admin.ModelAdmin):
 class KnowledgeCardAdmin(admin.ModelAdmin):
     list_display = ("slug", "version", "verification_status", "verified_at")
     list_filter = ("verification_status",)
+
+    def get_readonly_fields(self, request, obj=None):
+        # A card version is immutable once saved: corrected content is a
+        # new version. Only the status may change (verify a draft, retire).
+        return ("slug", "version", "title", "facts_json", "pitfalls_json") if obj else ()
 
 
 class RevisionPublicationActionMixin:

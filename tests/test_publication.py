@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.ai.models import QualityReport
+from apps.library.editorial import card_version_records
 from apps.library.models import KnowledgeCard, Publication, Thinker
 from apps.library.services import PublicationBlocked, publish_revision
 from apps.operations.models import AuditEvent, Report
@@ -32,11 +33,18 @@ class PublicationGateTests(TestCase):
         self.revision = Revision.objects.create(project=self.project, payload=PAYLOAD)
 
     def _make_report(self, factual_state="supported", blocking=False):
+        """Fixture report as a review job would leave it for the cards
+        linked to the revision at this moment."""
         return QualityReport.objects.create(
             revision=self.revision,
             revision_content_hash=self.revision.content_hash,
-            review_json={"issues": [{"code": "x", "severity": "blocking" if blocking else "nonblocking", "reason_ru": "r"}]},
+            review_json={
+                "verdict": "repair" if blocking else "pass",
+                "issues": [{"code": "x", "severity": "blocking" if blocking else "nonblocking", "reason_ru": "r"}],
+            },
             factual_state=factual_state,
+            eligibility_state="ineligible" if blocking or factual_state != "supported" else "eligible",
+            card_versions_json=card_version_records(self.revision),
         )
 
     def _link_card(self, status=KnowledgeCard.Status.VERIFIED):
@@ -70,8 +78,8 @@ class PublicationGateTests(TestCase):
         self.assertTrue(AuditEvent.objects.filter(action="editorial_publish", object_reference=f"revision:{self.revision.pk}").exists())
 
     def test_repeat_action_is_idempotent(self):
-        self._make_report()
         self._link_card()
+        self._make_report()
         first, created1 = publish_revision(revision=self.revision, admin=self.admin, slug="same-slug")
         second, created2 = publish_revision(revision=self.revision, admin=self.admin, slug="same-slug")
         self.assertTrue(created1)
@@ -80,8 +88,8 @@ class PublicationGateTests(TestCase):
         self.assertEqual(Publication.objects.filter(revision=self.revision).count(), 1)
 
     def test_stale_report_does_not_authorize_new_content(self):
-        self._make_report()
         self._link_card()
+        self._make_report()
         # The revision payload is immutable: changing content means creating
         # a new revision whose hash no existing report matches.
         payload = dict(PAYLOAD)
@@ -95,8 +103,8 @@ class PublicationGateTests(TestCase):
             self.revision.save()
 
     def test_publication_survives_head_change(self):
-        self._make_report()
         self._link_card()
+        self._make_report()
         publication, _ = publish_revision(revision=self.revision, admin=self.admin, slug="stable")
         # Move head elsewhere; the publication keeps pointing at the revision.
         other = Revision.objects.create(project=self.project, payload={**PAYLOAD, "title_ru": "Другая"})
@@ -107,8 +115,8 @@ class PublicationGateTests(TestCase):
         self.assertEqual(publication.status, Publication.Status.PUBLISHED)
 
     def test_private_unknown_rights_block_publication(self):
-        self._make_report()
         self._link_card()
+        self._make_report()
         document = SourceDocument.objects.create(
             owner=self.user, content_hash="abc", normalized_text="text",
             origin=SourceDocument.Origin.USER, visibility=SourceDocument.Visibility.PRIVATE,
