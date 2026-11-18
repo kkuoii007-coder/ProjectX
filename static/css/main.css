@@ -399,6 +399,13 @@ textarea::placeholder {
   opacity: 1;
 }
 
+/* Rotating shelf examples under the workshop topic field (JS only; without
+   JS the first example is the placeholder itself). */
+.workshop-examples {
+  min-height: 1.5em;
+  margin-top: var(--s-2);
+}
+
 .helptext,
 .errorlist {
   font-size: var(--fs-1);

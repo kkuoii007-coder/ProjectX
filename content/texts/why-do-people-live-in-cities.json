@@ -1,0 +1,329 @@
+{
+  "schema": "editorial-text-1",
+  "slug": "why-do-people-live-in-cities",
+  "cover": "sea",
+  "knowledge_cards": [
+    {
+      "slug": "aristotle-politics-city",
+      "version": 3
+    }
+  ],
+  "payload": {
+    "title_en": "On the shelf: Aristotle, Politics",
+    "title_ru": "На полке: Аристотель, «Политика»",
+    "parts": [
+      {
+        "title_en": "A book on the shelf",
+        "title_ru": "Книга на полке",
+        "sentences": [
+          {
+            "en": "Aristotle was a Greek thinker.",
+            "ru": "Аристотель был греческим мыслителем."
+          },
+          {
+            "en": "He lived more than two thousand years ago.",
+            "ru": "Он жил больше двух тысяч лет назад."
+          },
+          {
+            "en": "One of his books is called Politics.",
+            "ru": "Одна из его книг называется «Политика»."
+          },
+          {
+            "en": "It talks about the city-state.",
+            "ru": "Она говорит о городе-государстве."
+          },
+          {
+            "en": "A city-state is a small state with one city at its heart.",
+            "ru": "Город-государство — это маленькое государство с городом в центре."
+          },
+          {
+            "en": "That is our explanation, not his words.",
+            "ru": "Это наше пояснение, а не его слова."
+          },
+          {
+            "en": "Aristotle asks a first question.",
+            "ru": "Аристотель задаёт первый вопрос."
+          },
+          {
+            "en": "Do people come together only to trade?",
+            "ru": "Сходятся ли люди только ради торговли?"
+          },
+          {
+            "en": "Traders from far lands promise not to wrong each other.",
+            "ru": "Купцы из далёких земель обещают не обижать друг друга."
+          },
+          {
+            "en": "But that does not make one city-state of them, says Aristotle.",
+            "ru": "Но это не делает их одним городом-государством, говорит Аристотель."
+          },
+          {
+            "en": "A city-state exists by nature.",
+            "ru": "Город-государство существует по природе."
+          },
+          {
+            "en": "It comes into existence for the sake of life, and it exists for the good life.",
+            "ru": "Он возникает ради жизни, а существует ради хорошей жизни."
+          }
+        ],
+        "fork": {
+          "title_en": "Before you read on",
+          "prompt": {
+            "en": "Aristotle says the city-state exists by nature. What can “by nature” mean here?",
+            "ru": "Аристотель говорит, что город-государство существует по природе. Что здесь может значить «по природе»?"
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label_en": "Made by people",
+              "en": "Your answer: people plan it, so it is made. For Aristotle, “by nature” speaks about the end, not about the plan. Read on.",
+              "ru": "Ваш ответ: люди его планируют, значит, он сделан. Для Аристотеля «по природе» говорит о цели, а не о плане. Читайте дальше."
+            },
+            {
+              "key": "no",
+              "label_en": "Grown like a plant",
+              "en": "Your answer: it grows to its end. For Aristotle, nature is what a thing is when its growth is complete. Read on.",
+              "ru": "Ваш ответ: он растёт к своей цели. Для Аристотеля природа — это то, чем вещь становится, когда рост завершён. Читайте дальше."
+            },
+            {
+              "key": "not_sure",
+              "label_en": "Not sure",
+              "en": "Your answer: it is a hard question. Read on and see.",
+              "ru": "Ваш ответ: это трудный вопрос. Читайте дальше и увидите."
+            }
+          ]
+        }
+      },
+      {
+        "title_en": "Why we live together",
+        "title_ru": "Почему мы живём вместе",
+        "sentences": [
+          {
+            "en": "Aristotle says: man is by nature a political animal.",
+            "ru": "Аристотель говорит: человек по природе — существо политическое."
+          },
+          {
+            "en": "What does that mean?",
+            "ru": "Что это значит?"
+          },
+          {
+            "en": "He compares people with animals that live together.",
+            "ru": "Он сравнивает людей с животными, которые живут вместе."
+          },
+          {
+            "en": "Man is a political animal more than any bee, he says.",
+            "ru": "Человек — политическое животное больше, чем любая пчела, говорит он."
+          },
+          {
+            "en": "Why more?",
+            "ru": "Почему больше?"
+          },
+          {
+            "en": "A bee has a voice for pain and pleasure.",
+            "ru": "У пчелы есть голос для боли и удовольствия."
+          },
+          {
+            "en": "People have speech.",
+            "ru": "У людей есть речь."
+          },
+          {
+            "en": "It can show the right and the wrong.",
+            "ru": "Она может показать правильное и неправильное."
+          },
+          {
+            "en": "Sharing these words makes a household and a city-state.",
+            "ru": "Общность в таких словах создаёт семью и город-государство."
+          },
+          {
+            "en": "Nature is what a thing is when its growth is complete.",
+            "ru": "Природа — это то, чем вещь становится, когда рост завершён."
+          },
+          {
+            "en": "Like a man: a grown man is the complete one.",
+            "ru": "Как у человека: взрослый мужчина и есть завершённый."
+          },
+          {
+            "en": "It exists not only for life, but for the good life.",
+            "ru": "Он существует не только ради жизни, а ради хорошей жизни."
+          }
+        ]
+      },
+      {
+        "title_en": "The city comes first",
+        "title_ru": "Город идёт первым",
+        "sentences": [
+          {
+            "en": "Aristotle makes a strange claim.",
+            "ru": "Аристотель делает странное заявление."
+          },
+          {
+            "en": "He says: the city-state is before each of us.",
+            "ru": "Он говорит: город-государство прежде каждого из нас."
+          },
+          {
+            "en": "Before in what way?",
+            "ru": "Прежде — в каком смысле?"
+          },
+          {
+            "en": "Not before in time.",
+            "ru": "Не прежде по времени."
+          },
+          {
+            "en": "He means before in nature.",
+            "ru": "Он имеет в виду — прежде по природе."
+          },
+          {
+            "en": "The whole is before the part.",
+            "ru": "Целое прежде своей части."
+          },
+          {
+            "en": "A hand cut off from the body is not really a hand.",
+            "ru": "Рука, отрезанная от тела, — на самом деле не рука."
+          },
+          {
+            "en": "We can call it a hand, but only in words.",
+            "ru": "Мы можем назвать её рукой, но только словами."
+          },
+          {
+            "en": "A man alone is like that hand.",
+            "ru": "Человек в одиночку похож на такую руку."
+          },
+          {
+            "en": "A man who cannot live in a community is no part of a city-state.",
+            "ru": "Человек, который не может жить в сообществе, — не часть города-государства."
+          },
+          {
+            "en": "Such a man, he says, is a lower animal or a god.",
+            "ru": "Такой человек, говорит он, — животное низшего порядка или бог."
+          }
+        ]
+      },
+      {
+        "title_en": "Who rules?",
+        "title_ru": "Кто правит?",
+        "sentences": [
+          {
+            "en": "Now a hard question: who should rule?",
+            "ru": "Теперь трудный вопрос: кто должен править?"
+          },
+          {
+            "en": "In a city-state, a citizen shares in judgement and in office.",
+            "ru": "В городе-государстве гражданин участвует в суде и в должностях."
+          },
+          {
+            "en": "This definition fits a democracy best, Aristotle says.",
+            "ru": "Это определение лучше всего подходит демократии, говорит Аристотель."
+          },
+          {
+            "en": "But should one man stand above everybody?",
+            "ru": "Но должен ли один человек стоять над всеми?"
+          },
+          {
+            "en": "Aristotle answers: even the best man is a man.",
+            "ru": "Аристотель отвечает: даже лучший человек — человек."
+          },
+          {
+            "en": "Appetite in him is like a wild animal.",
+            "ru": "Желание в нём подобно дикому зверю."
+          },
+          {
+            "en": "Passion warps the rule even of the best men.",
+            "ru": "Страсть искажает правление даже у лучших."
+          },
+          {
+            "en": "So he says: let the law rule.",
+            "ru": "Поэтому он говорит: пусть правит закон."
+          },
+          {
+            "en": "The law is wisdom without desire — Rackham's English for his Greek.",
+            "ru": "Закон — это мудрость без желания — так это звучит в английском переводе Рэкхема."
+          }
+        ]
+      },
+      {
+        "title_en": "The middle",
+        "title_ru": "Середина",
+        "sentences": [
+          {
+            "en": "So what is the best city-state?",
+            "ru": "Какой город-государство лучший?"
+          },
+          {
+            "en": "In every state there are three classes, says Aristotle.",
+            "ru": "В каждом государстве есть три слоя, говорит Аристотель."
+          },
+          {
+            "en": "The very rich, the very poor, and those between them.",
+            "ru": "Очень богатые, очень бедные и те, кто между ними."
+          },
+          {
+            "en": "The best community is governed by the middle class.",
+            "ru": "Лучшее сообщество управляется средним слоем."
+          },
+          {
+            "en": "Why? Because this rule is free from factions, he says.",
+            "ru": "Почему? Потому что это устройство свободно от раздоров, говорит он."
+          },
+          {
+            "en": "The very rich turn to insolence, he says.",
+            "ru": "Очень богатые впадают в дерзость, говорит он."
+          },
+          {
+            "en": "They do not wish to be governed.",
+            "ru": "Они не желают подчиняться."
+          },
+          {
+            "en": "The very poor turn to petty wickedness, he says.",
+            "ru": "Очень бедные впадают в мелкие злодейства, говорит он."
+          },
+          {
+            "en": "They know only how to obey, in a servile way.",
+            "ru": "Они умеют только повиноваться, по-рабски."
+          },
+          {
+            "en": "The middle class is least inclined to run from office or to reach for it.",
+            "ru": "Средний слой меньше всего склонен избегать должностей и добиваться их."
+          },
+          {
+            "en": "The book is still on our shelf.",
+            "ru": "Книга всё ещё стоит на нашей полке."
+          }
+        ]
+      }
+    ],
+    "glossary": [
+      {
+        "term_en": "nature",
+        "explanation_en": "In Aristotle's argument: nature is what a thing is when its growth is complete. So the city completes the growth of a human community.",
+        "translation_ru": "природа"
+      },
+      {
+        "term_en": "citizen",
+        "explanation_en": "A member of a city-state who can judge cases and hold office; in a democracy especially.",
+        "translation_ru": "гражданин"
+      },
+      {
+        "term_en": "law",
+        "explanation_en": "Wisdom without desire — Rackham's English for Aristotle's Greek: the law rules the city instead of one man.",
+        "translation_ru": "закон"
+      },
+      {
+        "term_en": "middle class",
+        "explanation_en": "The class between the very rich and the very poor; for Aristotle it keeps the state free from faction.",
+        "translation_ru": "средний слой, средний класс"
+      },
+      {
+        "term_en": "faction",
+        "explanation_en": "A group that fights the rest of the city for its own side.",
+        "translation_ru": "раздор, клика"
+      },
+      {
+        "term_en": "office",
+        "explanation_en": "A public role in the city-state; a citizen shares in office and in judging cases.",
+        "translation_ru": "должность"
+      }
+    ],
+    "source_en": "Aristotle, Politics, translated by H. Rackham (Loeb Classical Library 264, 1932)",
+    "simplification_note_ru": "Аристотель, «Политика», в переводе Г. Рэкхема (Loeb 264): книга I, 1252b–1253a; книга III, 1275a–b, 1280b–1281a и 1287a; книга IV, 1295b–1296b. Это пересказ простыми словами, а не цитаты. Пояснения составителя: «город-государство — это маленькое государство с городом в центре» — историческое пояснение, а не слова Аристотеля; определения в глоссарии передают аргумент Аристотеля и формулы Рэкхема, а не современные значения слов. Упрощения: polis передано как «город-государство»; «город прежде человека» означает «по природе» (рост сообщества завершается городом), а не по времени; «животное низшего порядка или бог» — передача формулы Рэкхема «a lower animal or a god»; слова о законе («мудрость без желания») и о среднем слое (дерзость, мелкие злодейства) даны по формулам Рэкхема и поданы как перевод; пример с пчёлами и пример о торговых договорах (этруски и карфагеняне) — гипотетические аргументы Аристотеля; определение гражданина Аристотель сам связывает прежде всего с демократией.",
+    "authorship": "ai"
+  }
+}
