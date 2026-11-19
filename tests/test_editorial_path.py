@@ -35,7 +35,7 @@ TEXT_FILE = CONTENT / "texts" / "what-does-it-mean-to-be-brave.json"
 CARD_FILE = CONTENT / "cards" / "plato-laches-courage-v1.json"
 # sha256 of the canonical payload. The first text is loaded unchanged: any
 # edit to the file, however small, must be deliberate and change this value.
-FIRST_TEXT_HASH = "0fdc678d70b6dfa49b4046efa4b7b5720b9a81fe5c60d14c557e543d08f0f905"
+FIRST_TEXT_HASH = "cee91034107e66c1ad5f37d9861641eea2138d1e2946c0a655ce3914bc74b815"
 
 PASS_REVIEW = {
     "verdict": "pass",
@@ -113,7 +113,7 @@ class FirstTextFileTests(TestCase):
         self.assertEqual(canonical_hash(payload), FIRST_TEXT_HASH)
         self.assertEqual(payload["title_en"], "What does it mean to be brave?")
         self.assertEqual([len(part["sentences"]) for part in payload["parts"]], [10, 11, 12, 5])
-        self.assertEqual(payload["parts"][0]["sentences"][0], {"en": "Two men talk in Athens.", "ru": "Двое мужчин беседуют в Афинах."})
+        self.assertEqual(payload["parts"][0]["sentences"][0], {"en": "Two men talk.", "ru": "Двое мужчин беседуют."})
         self.assertEqual(payload["parts"][3]["sentences"][-1], {"en": "When is it brave to turn back?", "ru": "А когда — повернуть назад?"})
         fork = payload["parts"][0]["fork"]
         self.assertEqual([option["label_en"] for option in fork["options"]], ["Yes", "No", "Not sure"])
@@ -518,8 +518,8 @@ class PublicationTests(EditorialBase):
         self.assertEqual(publication.revision.payload, text_data()["payload"])
         response = self.client.get(reverse("library:read", args=[self.slug]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Two men talk in Athens.")
-        self.assertContains(response, "Двое мужчин беседуют в Афинах.")
+        self.assertContains(response, "Two men talk.")
+        self.assertContains(response, "Двое мужчин беседуют.")
         self.assertEqual(self.client.get(reverse("library:home")).status_code, 200)
         self.assertEqual(self.client.get(reverse("library:library")).status_code, 200)
 

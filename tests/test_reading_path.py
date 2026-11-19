@@ -506,7 +506,7 @@ class PresenterTests(SimpleTestCase):
 
     def test_cover_lines_are_the_first_two_sentences(self):
         lines = cover_lines(reader_parts(self.payload()))
-        self.assertEqual([line["en"] for line in lines], ["Two men talk in Athens.", "Their names are Socrates and Laches."])
+        self.assertEqual([line["en"] for line in lines], ["Two men talk.", "Their names are Socrates and Laches."])
         self.assertEqual([line["id"] for line in lines], ["cover-line-1", "cover-line-2"])
         self.assertEqual(cover_lines(reader_parts({"parts": [{"sentences": [{"en": "Only.", "ru": "Одно."}]}]})), [{"en": "Only.", "ru": "Одно.", "id": "cover-line-1"}])
         self.assertEqual(cover_lines([]), [])
