@@ -27,19 +27,20 @@
   </section>
   {% if part.fork %}
   {# A prepared question, not a test: nothing is sent, saved or scored. #}
-  <section class="choice" data-fork aria-labelledby="{{ part.fork.prompt.id }}-title">
+  <section class="choice" data-fork data-fork-id="fork-{{ part.number }}" data-fork-next="{% if part.fork.next_part %}{{ part.fork.next_part }}{% endif %}" aria-labelledby="{{ part.fork.prompt.id }}-title">
     {% include 'includes/fork.html' %}
     <div class="wrap reader__col">
       <h2 class="choice__title" id="{{ part.fork.prompt.id }}-title">{{ part.fork.title_en|default:"A question for you" }}</h2>
       <p class="line">{% if part.fork.prompt.ru %}<span class="s" lang="en" data-gloss="{{ part.fork.prompt.id }}">{{ part.fork.prompt.en }}</span><span class="gloss" id="{{ part.fork.prompt.id }}" lang="ru" role="note">{{ part.fork.prompt.ru }}</span>{% else %}<span class="s" lang="en">{{ part.fork.prompt.en }}</span>{% endif %}</p>
       <div class="choice__buttons" role="group" aria-labelledby="{{ part.fork.prompt.id }}-title" data-fork-buttons hidden>
         {% for option in part.fork.options %}
-        <button class="choice__btn" type="button" data-fork-choice="{{ option.id }}-line" aria-pressed="false">{{ option.label_en }}<span class="ru-ui" lang="ru">{% if option.key == 'yes' %}Да{% elif option.key == 'no' %}Нет{% else %}Сомневаюсь{% endif %}</span></button>
+        <button class="choice__btn" type="button" data-fork-choice="{{ option.id }}-line" data-fork-key="{{ option.key }}" aria-pressed="false">{{ option.label_en }}<span class="ru-ui" lang="ru">{% if option.key == 'yes' %}Да{% elif option.key == 'no' %}Нет{% else %}Сомневаюсь{% endif %}</span></button>
         {% endfor %}
       </div>
+      <p class="choice__hint" data-fork-hint>Choose an answer to read on. Any answer is fine.<span class="ru-ui" lang="ru">Выберите ответ, чтобы читать дальше. Подойдёт любой.</span></p>
       <div class="choice__options" aria-live="polite">
         {% for option in part.fork.options %}
-        <div class="choice__option" id="{{ option.id }}-line">
+        <div class="choice__option" id="{{ option.id }}-line" tabindex="-1">
           <p class="choice__label">{{ option.label_en }}</p>
           <p class="line">{% if option.ru %}<span class="s" lang="en" data-gloss="{{ option.id }}">{{ option.en }}</span><span class="gloss" id="{{ option.id }}" lang="ru" role="note">{{ option.ru }}</span>{% else %}<span class="s" lang="en">{{ option.en }}</span>{% endif %}</p>
         </div>

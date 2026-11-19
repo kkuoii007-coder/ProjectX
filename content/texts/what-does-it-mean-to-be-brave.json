@@ -88,8 +88,8 @@
         "title_en": "A hard case",
         "sentences": [
           {
-            "en": "Socrates says: “Yes, this man is brave.",
-            "ru": "Сократ говорит: «Да, такой человек смел."
+            "en": "Socrates says: “Yes, a man who stays is brave.",
+            "ru": "Сократ говорит: «Да, тот, кто остаётся, смел."
           },
           {
             "en": "But I have a new question.”",
@@ -116,12 +116,8 @@
             "ru": "Лахет говорит: «Это правда»."
           },
           {
-            "en": "Socrates says: “These men are brave too.”",
-            "ru": "Сократ говорит: «Эти люди тоже смелые»."
-          },
-          {
-            "en": "Laches agrees.",
-            "ru": "Лахет соглашается."
+            "en": "Socrates says: some brave men stay, and some turn back and fight.",
+            "ru": "Сократ говорит: одни смелые люди остаются на месте, а другие поворачивают назад и сражаются."
           },
           {
             "en": "Now there is a problem.",
@@ -132,10 +128,37 @@
             "ru": "Первый ответ говорит: смелый человек не убегает."
           },
           {
-            "en": "But these men run away, and they are brave.",
-            "ru": "Но эти люди убегают, и они смелые."
+            "en": "But these soldiers run away first, and then they win.",
+            "ru": "Но эти воины сначала убегают, а потом побеждают."
           }
-        ]
+        ],
+        "fork": {
+          "title_en": "Before you read on",
+          "prompt": {
+            "en": "Are people brave only in war?",
+            "ru": "Люди бывают смелыми только на войне?"
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label_en": "Yes",
+              "en": "You say yes. Laches's first answer was about war too. Read on.",
+              "ru": "Вы говорите «да». Первый ответ Лахета тоже был о войне. Читайте дальше."
+            },
+            {
+              "key": "no",
+              "label_en": "No",
+              "en": "You say no. Then where are people brave? Read on.",
+              "ru": "Вы говорите «нет». Тогда где люди бывают смелыми? Читайте дальше."
+            },
+            {
+              "key": "not_sure",
+              "label_en": "Not sure",
+              "en": "It is a hard question. Read on and see.",
+              "ru": "Это трудный вопрос. Читайте дальше и увидите."
+            }
+          ]
+        }
       },
       {
         "title_en": "A bigger question",
@@ -169,8 +192,8 @@
             "ru": "Третьи смелы в бедности»."
           },
           {
-            "en": "Laches agrees again.",
-            "ru": "Лахет снова соглашается."
+            "en": "Laches agrees.",
+            "ru": "Лахет соглашается."
           },
           {
             "en": "So Socrates asks: “What is the same in all these people?”",
@@ -188,7 +211,34 @@
             "en": "The men talk for a long time.",
             "ru": "Они говорят долго."
           }
-        ]
+        ],
+        "fork": {
+          "title_en": "Before you read on",
+          "prompt": {
+            "en": "Do the two men find the answer in the end?",
+            "ru": "Находят ли они в конце концов ответ?"
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label_en": "Yes",
+              "en": "You say yes. Then the men have an answer at the end. Read on and see.",
+              "ru": "Вы говорите «да». Тогда в конце у них есть ответ. Читайте дальше и увидите."
+            },
+            {
+              "key": "no",
+              "label_en": "No",
+              "en": "You say no. Then the question stays open. Read on and see.",
+              "ru": "Вы говорите «нет». Тогда вопрос остаётся открытым. Читайте дальше и увидите."
+            },
+            {
+              "key": "not_sure",
+              "label_en": "Not sure",
+              "en": "It is a hard question. Read on and see.",
+              "ru": "Это трудный вопрос. Читайте дальше и увидите."
+            }
+          ]
+        }
       },
       {
         "title_en": "No answer yet",
@@ -234,7 +284,7 @@
       }
     ],
     "source_en": "Plato, Laches",
-    "simplification_note_ru": "Платон, «Лахет», разделы 190e–192c и 199e. Это пересказ, а не цитаты. Упрощения: в диалоге участвуют ещё несколько человек; Лахет был полководцем, в тексте он soldier; фразы о трудности первого ответа принадлежат составителю.",
+    "simplification_note_ru": "Платон, «Лахет», разделы 190e–192c и 199e. Это пересказ, а не цитаты. Упрощения: в диалоге участвуют ещё несколько человек; Лахет был полководцем, в тексте он soldier; слова Сократа о тех, кто остаётся на месте, и о тех, кто поворачивает назад (191d–e), стоят в диалоге в конце его речи о море, болезни и бедности, здесь они перенесены раньше; Лахет соглашается со всей этой речью один раз; фразы о трудности первого ответа и вопросы читателю принадлежат составителю.",
     "authorship": "ai"
   }
 }

@@ -1410,6 +1410,16 @@ td form.inline {
   display: block;
 }
 
+.choice__hint {
+  margin: var(--s-4) 0 0;
+  font: 400 var(--fs-0)/1.4 var(--font-ui);
+  color: var(--ink-3);
+}
+
+.choice__hint .ru-ui {
+  display: block;
+}
+
 .choice__next {
   margin: var(--s-5) 0 0;
 }
@@ -1424,6 +1434,12 @@ td form.inline {
 
 .js .choice.has-choice .choice__next {
   display: block;
+}
+
+/* The part after a fork waits for an answer. JS-only: without JS and in
+   print the whole text is visible. */
+.js .part.is-locked {
+  display: none;
 }
 
 .reader__end {
@@ -2107,9 +2123,15 @@ td form.inline {
   .site-footer,
   .hint,
   .choice__buttons,
+  .choice__hint,
   .reader-tools,
   .fork {
     display: none !important;
+  }
+
+  /* Every part is printed, also the one JS keeps closed on screen. */
+  .js .part.is-locked {
+    display: block;
   }
 
   body,

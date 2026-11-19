@@ -24,7 +24,7 @@ from apps.ai.models import AIJob, ProviderAttempt, QualityReport
 from apps.ai.services import ReviewNotAllowed, claim_job, create_review_job, execute_job
 from apps.accounts.forms import RegisterForm
 from apps.credits.models import BudgetBucket, CreditTransaction
-from apps.library.editorial import EditorialError, canonical_hash, check_editorial_payload, load_card, submit_text
+from apps.library.editorial import EditorialError, canonical_hash, check_editorial_payload, load_card, submit_text, vocabulary_errors
 from apps.library.models import KnowledgeCard, Publication
 from apps.library.services import PublicationBlocked, publication_slug, publish_revision
 from apps.operations.models import AuditEvent
@@ -35,7 +35,7 @@ TEXT_FILE = CONTENT / "texts" / "what-does-it-mean-to-be-brave.json"
 CARD_FILE = CONTENT / "cards" / "plato-laches-courage-v1.json"
 # sha256 of the canonical payload. The first text is loaded unchanged: any
 # edit to the file, however small, must be deliberate and change this value.
-FIRST_TEXT_HASH = "9d22bbe0cfe6a054ca618b62d6449c573192692dffb1343e78a3efaa93f382cf"
+FIRST_TEXT_HASH = "5f9566a053401379fd463af911e2e56a973213743532f9d64b95626ed1d56eee"
 
 PASS_REVIEW = {
     "verdict": "pass",
@@ -112,7 +112,7 @@ class FirstTextFileTests(TestCase):
         payload = text_data()["payload"]
         self.assertEqual(canonical_hash(payload), FIRST_TEXT_HASH)
         self.assertEqual(payload["title_en"], "What does it mean to be brave?")
-        self.assertEqual([len(part["sentences"]) for part in payload["parts"]], [10, 12, 12, 5])
+        self.assertEqual([len(part["sentences"]) for part in payload["parts"]], [10, 11, 12, 5])
         self.assertEqual(payload["parts"][0]["sentences"][0], {"en": "Two men talk in Athens.", "ru": "Двое мужчин беседуют в Афинах."})
         self.assertEqual(payload["parts"][3]["sentences"][-1], {"en": "When is it brave to go?", "ru": "А когда — уйти?"})
         fork = payload["parts"][0]["fork"]
@@ -122,7 +122,7 @@ class FirstTextFileTests(TestCase):
     def test_file_passes_structural_check_and_length_is_only_a_warning(self):
         errors, diagnostics = check_editorial_payload(text_data()["payload"])
         self.assertEqual(errors, [])
-        self.assertEqual(diagnostics["fork_count"], 1)
+        self.assertEqual(diagnostics["fork_count"], 3)
         # Part 4 is below the editorial word range: reported, never blocking.
         self.assertTrue(any("Часть 4" in warning for warning in diagnostics["warnings_ru"]))
 
@@ -143,6 +143,81 @@ class FirstTextFileTests(TestCase):
         broken = copy.deepcopy(payload)
         broken["notes"] = "typo in a key must not pass silently"
         self.assertTrue(check_editorial_payload(broken)[0])
+
+
+class ForkRulesTests(TestCase):
+    """The fork after every part but the last: exact labels and "?" (owner decision, Nov 2026)."""
+
+    def test_a_button_label_other_than_the_exact_word_is_refused(self):
+        payload = text_data()["payload"]
+        broken = copy.deepcopy(payload)
+        broken["parts"][0]["fork"]["options"][0]["label_en"] = "Yes, of course"
+        errors = check_editorial_payload(broken)[0]
+        self.assertTrue(any("подпись кнопки" in error for error in errors))
+
+    def test_b_question_without_a_question_mark_is_refused(self):
+        payload = text_data()["payload"]
+        broken = copy.deepcopy(payload)
+        broken["parts"][1]["fork"]["prompt"]["en"] = "Are people brave only in war"
+        errors = check_editorial_payload(broken)[0]
+        self.assertTrue(any("знаком вопроса" in error for error in errors))
+
+    def test_c_missing_fork_after_a_non_last_part_is_refused(self):
+        payload = text_data()["payload"]
+        broken = copy.deepcopy(payload)
+        del broken["parts"][2]["fork"]
+        errors = check_editorial_payload(broken)[0]
+        self.assertTrue(any("Часть 3: после непоследней части нужна развилка" == error for error in errors))
+
+
+class VocabularyGatesTests(EditorialBase):
+    """submit_text gates: A1 share, words above A2 in the glossary, sentence length."""
+
+    def test_the_file_passes_all_gates(self):
+        payload = text_data()["payload"]
+        self.assertEqual(vocabulary_errors(payload), [])
+
+    def test_low_a1_share_is_refused(self):
+        payload = text_data()["payload"]
+        # Fill part 4 with B1 words ("abandon"): the share drops under 90 %.
+        part = payload["parts"][3]
+        part["sentences"] = [
+            {"en": "They abandon every answer and abandon the easy way.", "ru": "Они оставляют всякий ответ и лёгкий путь."},
+            {"en": "They abandon the fear and abandon the doubt.", "ru": "Они оставляют страх и сомнение."},
+            {"en": "They abandon the old words and abandon the new.", "ru": "Они оставляют старые слова и новые."},
+            {"en": "They abandon the road and abandon the field.", "ru": "Они оставляют дорогу и поле."},
+            {"en": "They abandon the house and abandon the town.", "ru": "Они оставляют дом и город."},
+        ]
+        errors = vocabulary_errors(payload)
+        self.assertTrue(any("слов уровня A1" in error for error in errors))
+
+    def test_word_above_a2_without_glossary_is_refused(self):
+        payload = text_data()["payload"]
+        # "abandon" is B1 in the CEFR-J list and absent from the glossary.
+        payload["parts"][3]["sentences"][0] = {"en": "They abandon the first answer.", "ru": "Они оставляют первый ответ."}
+        errors = vocabulary_errors(payload)
+        self.assertTrue(any("выше A2 без словарика — abandon" in error for error in errors))
+
+    def test_glossed_word_above_a2_passes(self):
+        payload = text_data()["payload"]
+        # "soldier" is A2... "abandon" is B1: gloss it, then the gate passes.
+        payload["glossary"].append({"term_en": "abandon", "explanation_en": "To leave without help.", "translation_ru": "оставлять"})
+        payload["parts"][3]["sentences"][0] = {"en": "They abandon the first answer.", "ru": "Они оставляют первый ответ."}
+        self.assertEqual(vocabulary_errors(payload), [])
+
+    def test_long_sentence_is_refused(self):
+        payload = text_data()["payload"]
+        long_sentence = " ".join(["He said one word."] * 5)  # 20 words total
+        payload["parts"][3]["sentences"][0] = {"en": long_sentence, "ru": "Он сказал одно слово. Он сказал одно слово. Он сказал одно слово. Он сказал одно слово. Он сказал одно слово."}
+        errors = vocabulary_errors(payload)
+        self.assertTrue(any("предложение длиннее 16 слов" in error for error in errors))
+
+    def test_gates_run_at_submission(self):
+        data = text_data()
+        data["payload"]["parts"][3]["sentences"][0] = {"en": "They abandon the first answer.", "ru": "Они оставляют первый ответ."}
+        with self.assertRaises(EditorialError) as ctx:
+            self.submit(data)
+        self.assertTrue(any("abandon" in message for message in ctx.exception.messages))
 
 
 class SubmitTests(EditorialBase):

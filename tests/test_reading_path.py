@@ -304,7 +304,8 @@ class ReaderTests(ReadingBase):
         fork = self.payload["parts"][0]["fork"]
         parts = response.context["parts"]
         self.assertEqual(parts[0]["fork"]["next_part"], 2)
-        self.assertEqual([p["fork"] for p in parts[1:]], [None, None, None])
+        self.assertEqual([parts[1]["fork"]["next_part"], parts[2]["fork"]["next_part"]], [3, 4])
+        self.assertIsNone(parts[3]["fork"])
         last_of_first = content.index(self.payload["parts"][0]["sentences"][-1]["en"])
         first_of_second = content.index(self.payload["parts"][1]["sentences"][0]["en"])
         prompt = content.index(fork["prompt"]["en"])
@@ -328,6 +329,15 @@ class ReaderTests(ReadingBase):
             self.assertNotIn(marker, block)
         for word in ("correct", "wrong answer", "right answer", "score", "верно", "правильн", "ошибк"):
             self.assertNotIn(word, block.lower())
+
+    def test_fork_offers_the_hint_and_marks_the_part_it_opens(self):
+        content = page(self.client.get(READ_URL))
+        self.assertIn("Choose an answer to read on. Any answer is fine.", content)
+        self.assertIn("Выберите ответ, чтобы читать дальше", content)
+        # The fork names the part it opens; the choice itself happens in JS.
+        self.assertIn('data-fork-id="fork-1"', content)
+        self.assertIn('data-fork-next="2"', content)
+        self.assertIn('data-fork-key="yes"', content)
 
     def test_end_of_the_text(self):
         response = self.client.get(READ_URL)
@@ -408,6 +418,8 @@ class ReaderTests(ReadingBase):
     def test_fork_after_the_last_part_offers_no_way_on(self):
         parts = reader_parts(self.payload)
         parts[0]["fork"]["next_part"] = None
+        parts[1]["fork"]["next_part"] = None
+        parts[2]["fork"]["next_part"] = None
         with patch("apps.library.views.reader_parts", return_value=parts):
             content = page(self.client.get(READ_URL))
         self.assertIn(self.payload["parts"][0]["fork"]["prompt"]["en"], content)
@@ -490,7 +502,7 @@ class PresenterTests(SimpleTestCase):
         parts = reader_parts(self.payload())
         self.assertEqual([s["en"] for s in parts[1]["sentences"]], [s["en"] for s in self.payload()["parts"][1]["sentences"]])
         self.assertEqual(parts[0]["sentences"][0]["id"], "gloss-1-1")
-        self.assertEqual(parts[1]["sentences"][11]["id"], "gloss-2-12")
+        self.assertEqual(parts[1]["sentences"][10]["id"], "gloss-2-11")
 
     def test_cover_lines_are_the_first_two_sentences(self):
         lines = cover_lines(reader_parts(self.payload()))
@@ -548,11 +560,13 @@ class SourceContractTests(SimpleTestCase):
     def test_script_sends_and_stores_nothing_but_the_caption_switch(self):
         for call in ("fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "EventSource", "document.cookie", "sessionStorage", "indexedDB", "import("):
             self.assertNotIn(call, self.script, call)
-        self.assertEqual(self.script.count("localStorage"), 2)
+        self.assertEqual(self.script.count("localStorage"), 5)  # caption pref (read+write) and fork choices (read+write)
         self.assertEqual(self.script.count("RU_KEY"), 3)  # declared, read, written
         self.assertIn("var RU_KEY = 'pr-ui-ru';", self.script)
+        # The fork keeps its choices on this device (localStorage) and never
+        # sends them: no network, no forms, no scoring.
         fork = self.script[self.script.index("function initForks"):self.script.index("function init()")]
-        for call in ("localStorage", "writePref", "location", "submit", "RU_KEY"):
+        for call in ("writePref", "location", "submit", "RU_KEY", "fetch(", "XMLHttpRequest", "sendBeacon"):
             self.assertNotIn(call, fork, call)
 
     def test_nothing_is_loaded_from_another_host(self):
