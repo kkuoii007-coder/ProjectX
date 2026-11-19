@@ -35,7 +35,7 @@ TEXT_FILE = CONTENT / "texts" / "what-does-it-mean-to-be-brave.json"
 CARD_FILE = CONTENT / "cards" / "plato-laches-courage-v1.json"
 # sha256 of the canonical payload. The first text is loaded unchanged: any
 # edit to the file, however small, must be deliberate and change this value.
-FIRST_TEXT_HASH = "787111c0cc57b9ea90677c805dd806a7ec5428ea6bf2c3ead30734a8fb7f7c78"
+FIRST_TEXT_HASH = "0fdc678d70b6dfa49b4046efa4b7b5720b9a81fe5c60d14c557e543d08f0f905"
 
 PASS_REVIEW = {
     "verdict": "pass",
@@ -114,7 +114,7 @@ class FirstTextFileTests(TestCase):
         self.assertEqual(payload["title_en"], "What does it mean to be brave?")
         self.assertEqual([len(part["sentences"]) for part in payload["parts"]], [10, 11, 12, 5])
         self.assertEqual(payload["parts"][0]["sentences"][0], {"en": "Two men talk in Athens.", "ru": "Двое мужчин беседуют в Афинах."})
-        self.assertEqual(payload["parts"][3]["sentences"][-1], {"en": "When is it brave to go?", "ru": "А когда — уйти?"})
+        self.assertEqual(payload["parts"][3]["sentences"][-1], {"en": "When is it brave to turn back?", "ru": "А когда — повернуть назад?"})
         fork = payload["parts"][0]["fork"]
         self.assertEqual([option["label_en"] for option in fork["options"]], ["Yes", "No", "Not sure"])
         self.assertEqual([term["term_en"] for term in payload["glossary"]], ["brave", "soldier", "fight"])
