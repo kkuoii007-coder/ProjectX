@@ -20,7 +20,11 @@
         <form method="post" class="workshop-form">{% csrf_token %}
             <input type="hidden" name="mode" value="explain_topic">
             <label for="topic">О какой философской идее вы хотите прочитать?</label>
-            <textarea id="topic" name="topic" maxlength="2000" required rows="4" placeholder="Например: объясни концепцию вечного возвращения Ницше">{{ topic }}</textarea>
+            <textarea id="topic" name="topic" maxlength="2000" required rows="4" placeholder="{{ placeholder_examples.0 }}">{{ topic }}</textarea>
+            {# Examples are presentation, not data: the first one also serves as the static no-JS placeholder. #}
+            <p class="workshop-examples meta" data-topic-examples>
+              {% for example in placeholder_examples %}<span lang="en"{% if not forloop.first %} hidden{% endif %}>On the shelf: {{ example }}.</span>{% endfor %}
+            </p>
             <button type="submit">Создать текст</button>
         </form>
         <div class="prose workshop-terms">

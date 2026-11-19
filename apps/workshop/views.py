@@ -13,9 +13,23 @@ from apps.ai.services import InsufficientCredits, JobConflict, JobError, QueueFu
 from .models import Message, Project, Revision
 
 
+# Presentation-only examples for the workshop entry form: one of them must be
+# Politics, the text now on the shelf (stage 2 of the owner's content plan).
+TOPIC_EXAMPLES = (
+    "Aristotle, Politics",
+    "Plato, the cave",
+    "Socrates, asking questions",
+)
+
+
 def _create_page(request, status=200, **extra):
     """The workshop entry page (the form used to live on the home page)."""
-    return render(request, "workshop/create.html", {"costs": settings.CREDIT_COSTS, **extra}, status=status)
+    return render(
+        request,
+        "workshop/create.html",
+        {"costs": settings.CREDIT_COSTS, "placeholder_examples": TOPIC_EXAMPLES, **extra},
+        status=status,
+    )
 
 
 @require_http_methods(["GET", "POST"])

@@ -1,0 +1,48 @@
+{
+  "schema": "knowledge-card-1",
+  "slug": "aristotle-politics-city",
+  "version": 2,
+  "title": "Aristotle, Politics: the city, the citizen and the rule of law (1252b-1253a, 1275a-b, 1280b-1281a, 1287a, 1295b-1296b)",
+  "sources": [
+    {
+      "title": "Aristotle, Politics. English translation by H. Rackham (Loeb Classical Library 264, 1932), archive.org",
+      "url": "https://archive.org/details/politicsaristot00aris",
+      "sections": "1252b-1253a, 1275a-b, 1280b-1281a, 1287a, 1295b-1296b"
+    }
+  ],
+  "facts": [
+    {"fact_id": "city-exists-by-nature", "locator": "1252b30-1253a2", "support_type": "paraphrase", "text": "The city-state comes into existence for the sake of life but exists for the sake of the good life; therefore every city-state exists by nature."},
+    {"fact_id": "man-political-animal", "locator": "1253a2-4", "support_type": "paraphrase", "text": "It is clear from this that man is by nature a political animal, and that a man who is by nature and not merely by fortune without a city is low in the scale of humanity or above it."},
+    {"fact_id": "political-animal-bees", "locator": "1253a7-9", "support_type": "paraphrase", "text": "Man is a political animal in a greater measure than any bee or any gregarious animal; other animals have a voice for pain and pleasure, but speech shows the advantageous and the harmful, the right and the wrong."},
+    {"fact_id": "city-prior-to-individual", "locator": "1253a19-29", "support_type": "paraphrase", "text": "The city-state is prior in nature to the household and to each of us individually, as the whole is prior to the part: a hand cut off from the body can be called a hand only in an equivocal sense."},
+    {"fact_id": "beast-or-god", "locator": "1253a25-29", "support_type": "paraphrase", "text": "A man who is incapable of entering into partnership, or who is so self-sufficing that he has no need of it, is no part of a state; he must be either a lower animal or a god."},
+    {"fact_id": "not-merely-trade", "locator": "1280b31-1281a3", "support_type": "paraphrase", "text": "A state is not formed for the sake of trade and business relations alone: if trade treaties and an alliance against wrong-doing made a city, the Etruscans and the Carthaginians would be virtually citizens of one state, but they have no common officials concerned with virtue."},
+    {"fact_id": "citizen-defined-by-office", "locator": "1275a17-23", "support_type": "paraphrase", "text": "A citizen in the absolute sense is defined above all by the right to participate in judicial functions and in office."},
+    {"fact_id": "citizen-definition-democracy", "locator": "1275b3-5", "support_type": "paraphrase", "text": "The definition of a citizen applies especially to citizenship in a democracy; under other forms of government it may hold good but will not necessarily do so."},
+    {"fact_id": "law-wisdom-without-desire", "locator": "1287a25-34", "support_type": "paraphrase", "text": "He who bids the law rule bids God and reason alone rule, but he who bids a man rule adds the wild animal; appetite and passion warp the rule even of the best men, so the law is wisdom without desire."},
+    {"fact_id": "middle-classes-three", "locator": "1295b1-6", "support_type": "paraphrase", "text": "Virtue is a middle state, so the middle course of life is best; and in every state there exist three classes: the very rich, the very poor, and a third class of those who are between the two."},
+    {"fact_id": "middle-class-best", "locator": "1296b7-13", "support_type": "paraphrase", "text": "The political community administered by the middle class is the best, and states can be well governed where the middle class is numerous and stronger than both extremes or at least than one of them."},
+    {"fact_id": "middle-class-reasons", "locator": "1296b4-12", "support_type": "paraphrase", "text": "The excessively rich and well-born turn to insolence and grand wickedness, are not willing to be governed and know how to govern only in the manner of a master; the very poor turn to malice and petty wickedness and know only how to submit to government of a servile kind; the middle class is least inclined to shun office and to covet it, so the extreme states are cities of slaves and masters, not of free men."},
+    {"fact_id": "middle-free-from-faction", "locator": "1296b13-17", "support_type": "paraphrase", "text": "The middle form of constitution is the best because it alone is free from faction: where the middle class is numerous, factions and party divisions among the citizens are least likely to occur."},
+    {"fact_id": "lawgivers-from-middle", "locator": "1296b33-38", "support_type": "paraphrase", "text": "It is a significant fact that the best lawgivers have been from among the middle citizens: Solon, Lycurgus, Charondas, and almost the greatest number of the other lawgivers."}
+  ],
+  "pitfalls": [
+    "Rackham translates polis as 'city-state'. Do not render it as 'state' in the abstract sense or as 'country'.",
+    "'Man is by nature a political animal' is Aristotle's argument from speech: only man perceives good and bad and right and wrong, and partnership in these makes a household and a city-state (1253a). Do not present it as a bare slogan.",
+    "The claim that the city is prior to the individual is about nature and function, not time: the city did not appear before people in history.",
+    "'Either a lower animal or a god' is Rackham's wording (1253a); a text may paraphrase it, but must not present it as a quotation from the Greek.",
+    "The citizen definition is given with Aristotle's own remark that it applies especially to a democracy (1275b); do not present it as universal for every constitution.",
+    "The praise of the middle class is Aristotle's argument about stability, moderation and freedom from faction (1295b-1296b); it is not a modern sociological claim about income.",
+    "'The law is wisdom without desire' is Rackham's phrasing of Aristotle's statement that law is reason free from passion (1287a). Quote it only as a rendering.",
+    "The bee comparison is Aristotle's own ('more than any bee or any gregarious animal', 1253a); bees serve the argument from speech, they are not a claim about animal politics.",
+    "The argument about trade treaties stands in Book III (1280b-1281a); the Etruscan and Carthaginian example is Aristotle's hypothetical, not a report about actual agreements.",
+    "This card covers the Rackham Loeb translation. Any wording quoted in a text must not pretend to be Greek quotations from Aristotle.",
+    "The imported translation is OCR-derived and may contain scanning artefacts; locators are Bekker ranges verified against page headings, not exact line numbers."
+  ],
+  "verification": {
+    "status": "verified",
+    "method": "ai",
+    "checked_on": "2026-11-18",
+    "note_ru": "Положения и Bekker-разделы сверены ИИ с английским переводом Г. Рэкхема (Loeb 264), извлечённым из PDF в редакционный корпус этого приложения (артефакт /tmp/politics_extracted.txt, страницы с заголовками 1252-1296). В версии 2 добавлены положения из книг II-IV (1275b, 1280b-1281a, 1295b-1296b), сверенные дословно по тем же страницам. Человек карточку не вычитывал: решение владельца от 18.11.2026."
+  }
+}

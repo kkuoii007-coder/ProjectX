@@ -1,9 +1,13 @@
 """Stage 5 tests: extraction, chunking, dedup, scope isolation, retrieval."""
 
+import io
+import os
+
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
 from apps.accounts.models import User
-from apps.sources.models import Embedding, SourceChunk, SourceDocument
+from apps.sources.models import Embedding, SourceChunk, SourceDocument, SourceWork
 from apps.sources.services import ExtractionError, chunk_text, extract_text, normalize_text, text_hash
 from apps.credits.models import grant_welcome_credits
 
@@ -149,6 +153,75 @@ class ScopeIsolationTests(TestCase):
         )
         self.assertEqual(len(hybrid_search(owner=self.alice, query="Plato")), 1)
         self.assertEqual(len(hybrid_search(owner=self.bob, query="Plato")), 1)
+
+
+class EditorialImportTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(login="srcuser", password="TestPassword123!")
+
+    def _import(self, path, **kwargs):
+        from django.core.management import call_command
+
+        options = {"path": path, "title": "Aristotle, Politics (Rackham)", "author": "Aristotle",
+                   "work_title": "Politics", "kind": "primary", "language": "en",
+                   "canonical_url": "", "edition": "Loeb Classical Library 264",
+                   "translator": "H. Rackham", "rights": "allowed", "edition_url": "",
+                   "retrieved_at": "2026-11-18"}
+        options.update(kwargs)
+        self._out = io.StringIO()
+        call_command("import_editorial_source", **options, stdout=self._out)
+        return self._out.getvalue()
+
+    def test_creates_shared_editorial_document(self):
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as handle:
+            handle.write(b"Man is by nature a political animal.")
+            path = handle.name
+        self.addCleanup(os.unlink, path)
+        output = self._import(path)
+        document = SourceDocument.objects.get(owner__isnull=True)
+        self.assertEqual(document.origin, SourceDocument.Origin.EDITORIAL)
+        self.assertEqual(document.visibility, SourceDocument.Visibility.EDITORIAL)
+        self.assertEqual(document.rights_state, "allowed")
+        self.assertEqual(document.edition.work.author, "Aristotle")
+        self.assertEqual(document.edition.work.title, "Politics")
+        self.assertEqual(document.edition.translator, "H. Rackham")
+        self.assertIn("создан", output)
+        # The editorial corpus is visible to any account in retrieval scope.
+        # The imported document is UPLOADED until index_source runs, so the
+        # retrieval check happens on a READY copy (indexing is a separate step).
+        from apps.sources.retrieval import _scope_documents
+
+        document.processing_state = SourceDocument.Processing.READY
+        document.save(update_fields=["processing_state"])
+        self.assertIn(document.pk, [d.pk for d in _scope_documents(self.user)])
+
+    def test_repeated_hash_no_new_document(self):
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as handle:
+            handle.write(b"Man is by nature a political animal.")
+            path = handle.name
+        self.addCleanup(os.unlink, path)
+        self._import(path)
+        self._import(path)
+        self.assertEqual(SourceDocument.objects.filter(owner__isnull=True).count(), 1)
+        self.assertEqual(SourceWork.objects.count(), 1)
+
+    def test_missing_file_rejected(self):
+        with self.assertRaises(CommandError):
+            self._import("/nonexistent/file.txt")
+
+    def test_bad_rights_rejected(self):
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as handle:
+            handle.write(b"text")
+            path = handle.name
+        self.addCleanup(os.unlink, path)
+        with self.assertRaises(CommandError):
+            self._import(path, rights="public-domain")
 
 
 class RetrievalRankingTests(TestCase):

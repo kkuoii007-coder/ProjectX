@@ -145,12 +145,32 @@
     });
   }
 
+  /* ---- rotating topic examples on the workshop entry form ------------------ */
+
+  function initTopicExamples() {
+    var group = doc.querySelector('[data-topic-examples]');
+    if (!group) { return; }
+    var items = group.querySelectorAll('span');
+    if (items.length < 2) { return; }
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return; // Keep the first example only; the form stays fully usable.
+    }
+    var current = 0;
+    function showNext() {
+      items[current].hidden = true;
+      current = (current + 1) % items.length;
+      items[current].hidden = false;
+    }
+    window.setInterval(showNext, 4000);
+  }
+
   function init() {
     try {
       initGlosses();
       initRuToggle();
       initMenu();
       initForks();
+      initTopicExamples();
       // Enhance only when everything above worked. The page waits for this
       // mark: without it the inline script in <head> takes the js class back.
       root.setAttribute('data-js-ready', '');
