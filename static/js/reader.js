@@ -118,15 +118,44 @@
     });
   }
 
-  /* ---- a fork in the text: three buttons, one prepared line ---------------- */
+  /* ---- a fork in the text: three buttons, one prepared line ----------------
+     With JS the part after a fork stays hidden until the reader picks an
+     answer; the choice is kept on this device only (localStorage), so a
+     reload does not close what is already read. Any of the three answers
+     opens the next part the same way; a made choice can be changed, and
+     what is open never closes again. */
+
+  var FORK_KEY = 'pr-fork-choices';
+
+  function readForkChoices() {
+    try {
+      var stored = JSON.parse(window.localStorage.getItem(FORK_KEY) || '{}');
+      return stored && typeof stored === 'object' ? stored : {};
+    } catch (error) { return {}; }
+  }
+
+  function writeForkChoices(choices) {
+    try { window.localStorage.setItem(FORK_KEY, JSON.stringify(choices)); } catch (error) { /* private mode: the choice lasts for this page */ }
+  }
 
   function initForks() {
-    doc.querySelectorAll('[data-fork]').forEach(function (fork) {
+    var forks = doc.querySelectorAll('[data-fork]');
+    if (!forks.length) { return; }
+    var saved = readForkChoices();
+
+    forks.forEach(function (fork) {
       var group = fork.querySelector('[data-fork-buttons]');
       var buttons = fork.querySelectorAll('[data-fork-choice]');
       if (!group || !buttons.length) { return; }
 
-      function choose(button) {
+      // The part this fork opens; it is hidden until an answer is chosen.
+      var nextPart = null;
+      if (fork.dataset.forkNext) {
+        nextPart = doc.getElementById('part-' + fork.dataset.forkNext);
+      }
+      var hint = fork.querySelector('[data-fork-hint]');
+
+      function mark(button) {
         buttons.forEach(function (other) {
           var option = doc.getElementById(other.getAttribute('data-fork-choice'));
           var chosen = other === button;
@@ -136,12 +165,48 @@
         fork.classList.add('has-choice');
       }
 
+      function choose(button, silent) {
+        mark(button);
+        var key = fork.dataset.forkId;
+        if (key) {
+          saved[key] = button.getAttribute('data-fork-key');
+          writeForkChoices(saved);
+        }
+        if (hint) { hint.hidden = true; }
+        if (nextPart) {
+          nextPart.classList.remove('is-locked');
+          nextPart.removeAttribute('aria-hidden');
+        }
+        if (!silent) {
+          // Focus moves to the chosen answer's line, so the reader can go on.
+          var line = doc.getElementById(button.getAttribute('data-fork-choice'));
+          if (line) { line.focus(); }
+        }
+      }
+
       buttons.forEach(function (button) {
         button.setAttribute('aria-controls', button.getAttribute('data-fork-choice'));
         button.addEventListener('click', function () { choose(button); });
       });
       group.hidden = false;
       fork.classList.add('is-ready');
+
+      // A choice kept on this device re-opens what was read, without focus.
+      var key = fork.dataset.forkId;
+      var remembered = key ? saved[key] : null;
+      if (remembered) {
+        var found = Array.prototype.some.call(buttons, function (button) {
+          if (button.getAttribute('data-fork-key') === remembered) { choose(button, true); return true; }
+          return false;
+        });
+        if (found) { return; }
+      }
+      // Nothing chosen yet (or the stored answer no longer exists): the part
+      // after this fork waits for a choice.
+      if (nextPart) {
+        nextPart.classList.add('is-locked');
+        nextPart.setAttribute('aria-hidden', 'true');
+      }
     });
   }
 

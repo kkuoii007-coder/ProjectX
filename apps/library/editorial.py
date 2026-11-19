@@ -11,6 +11,7 @@ Network calls never happen here; all functions are DB-only.
 
 import hashlib
 import json
+import re
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -41,6 +42,17 @@ LONG_SENTENCE_WORDS = 16
 # ones still publish, but on a small phone the button may fall below the fold.
 COVER_TITLE_CHARS = 48
 COVER_LINE_CHARS = 64
+
+# Fork after every part but the last (owner decision, Nov 2026): a closed
+# question about a concrete case, the buttons say exactly Yes/No/Not sure and
+# the question ends with "?". Applied to new submissions only; already
+# published revisions are never re-checked by the gate.
+FORK_LABELS = {"yes": "Yes", "no": "No", "not_sure": "Not sure"}
+# Vocabulary gates at submission (control, not a promise of level A1):
+# at least 90 % A1 words, every word above A2 must be in the text glossary,
+# and no sentence longer than LONG_SENTENCE_WORDS words.
+MIN_A1_SHARE = 90.0
+CEFR_LIST_PATH = "content/wordlists/cefrj-vocabulary-profile-1.5.csv"
 
 PAYLOAD_KEYS = {
     "title_en", "title_ru", "lead_ru", "parts", "glossary", "source_en",
@@ -97,6 +109,8 @@ def _check_fork(fork, where, is_last_part, errors):
     if not _is_text(fork["title_en"], MAX_TITLE_CHARS):
         errors.append(f"{where}: пустой заголовок развилки")
     _check_pair(fork["prompt"], f"{where}, вопрос", errors)
+    if isinstance(fork["prompt"], dict) and isinstance(fork["prompt"].get("en"), str) and not fork["prompt"]["en"].rstrip().endswith("?"):
+        errors.append(f"{where}, вопрос: закрытый вопрос должен заканчиваться знаком вопроса")
     options = fork["options"]
     if not isinstance(options, list) or [o.get("key") if isinstance(o, dict) else None for o in options] != list(FORK_KEYS):
         errors.append(f"{where}: нужны ровно три ответа по порядку: yes, no, not_sure")
@@ -105,6 +119,8 @@ def _check_fork(fork, where, is_last_part, errors):
         if set(option) != {"key", "label_en", "en", "ru"}:
             errors.append(f"{where}, ответ {option.get('key')}: нужны key, label_en, en, ru")
             continue
+        if option["label_en"] != FORK_LABELS[option["key"]]:
+            errors.append(f"{where}, ответ {option['key']}: подпись кнопки должна быть ровно {FORK_LABELS[option['key']]!r}")
         if not _is_text(option["label_en"], 40):
             errors.append(f"{where}, ответ {option['key']}: пустая подпись кнопки")
         _check_pair({"en": option["en"], "ru": option["ru"]}, f"{where}, ответ {option['key']}", errors)
@@ -162,6 +178,8 @@ def check_editorial_payload(payload):
                 count = len(sentence["en"].split())
                 words += count
                 long_sentences += count > LONG_SENTENCE_WORDS
+        if number < len(parts) and "fork" not in part:
+            errors.append(f"{where}: после непоследней части нужна развилка")
         if "fork" in part:
             _check_fork(part["fork"], f"{where}, развилка", number == len(parts), errors)
         diagnostics["parts"].append({"number": number, "sentences": len(sentences), "words_en": words, "long_sentences": long_sentences})
@@ -191,6 +209,183 @@ def check_editorial_payload(payload):
         if isinstance(sentence, dict) and isinstance(sentence.get("en"), str) and len(sentence["en"]) > COVER_LINE_CHARS:
             diagnostics["warnings_ru"].append(f"Обложка: предложение {index} длиннее {COVER_LINE_CHARS} знаков и займёт несколько строк")
     return errors, diagnostics
+
+
+# --- vocabulary profile -------------------------------------------------------
+
+CEFR_LEVELS = ("A1", "A2", "B1", "B2", "C1", "C2")
+
+# Irregular forms the list does not contain; the value is the listed base
+# form. Only frequent shapes a simplified text is likely to use.
+IRREGULAR_FORMS = {
+    "men": "man", "women": "woman", "children": "child", "feet": "foot",
+    "teeth": "tooth", "went": "go", "said": "say", "told": "tell",
+    "took": "take", "came": "come", "made": "make", "got": "get",
+    "knew": "know", "spoke": "speak", "ran": "run", "sat": "sit",
+    "stood": "stand", "saw": "see", "fought": "fight", "thought": "think",
+    "better": "good", "best": "good", "worse": "bad", "worst": "bad",
+}
+
+
+def _word_keys(word):
+    """The look-up keys for a word form: the form itself plus simple
+    regular shapes (plural -s, verb -s, -ed, -ing, -er/-est) and the
+    irregular map. The CEFR-J list stores base forms, so "asks" must
+    reach "ask" and "men" must reach "man".
+    """
+    keys = [word]
+    if word in IRREGULAR_FORMS:
+        keys.append(IRREGULAR_FORMS[word])
+    if word.endswith("'s"):
+        keys.append(word[:-2])
+    elif word.endswith("s") and not word.endswith("ss") and len(word) > 2:
+        keys.append(word[:-1])          # asks -> ask, names -> name
+        if word.endswith("ies"):
+            keys.append(word[:-3] + "y")  # carries -> carry
+        if word.endswith("es") and len(word) > 3:
+            keys.append(word[:-2])        # places -> place
+    if word.endswith("ed") and len(word) > 3:
+        keys.extend([word[:-2], word[:-1]])  # stayed -> stay/staye
+        if word.endswith("ied"):
+            keys.append(word[:-3] + "y")
+    if word.endswith("n't"):
+        keys.append(word[:-3])          # doesn't -> does
+    if word.endswith("ing") and len(word) > 4:
+        keys.extend([word[:-3], word[:-3] + "e"])  # naming -> nam/name
+    if word.endswith("er") and len(word) > 3:
+        keys.append(word[:-2])
+    if word.endswith("est") and len(word) > 4:
+        keys.append(word[:-3])
+    seen = []
+    for key in keys:
+        if key not in seen:
+            seen.append(key)
+    return seen
+
+
+def load_cefr_list(path=None):
+    """The CEFR-J vocabulary profile as {lowercased headword: lowest level}.
+
+    A headword may appear several times (one row per part of speech); the
+    level of a word is the lowest among its parts of speech. Proper nouns
+    (rows where the headword starts with a capital letter) are not counted
+    as vocabulary, so a reader is never refused because of a name.
+    """
+    import csv
+    from pathlib import Path
+
+    path = Path(path) if path else Path(__file__).resolve().parents[2] / CEFR_LIST_PATH
+    if not path.is_file():
+        raise EditorialError(f"Список словаря не найден: {path}")
+    order = {level: index for index, level in enumerate(CEFR_LEVELS)}
+    levels = {}
+    with open(path, encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            headword = (row.get("headword") or "").strip()
+            level = (row.get("CEFR") or "").strip()
+            if not headword or level not in order or headword[0].isupper():
+                continue  # proper nouns are not vocabulary
+            key = headword.split("/")[0].lower()
+            if key not in levels or order[level] < order[levels[key]]:
+                levels[key] = level
+    return levels
+
+
+def profile_vocabulary(payload, cefr_levels=None):
+    """Word profile of the English sentences: counts, shares, details.
+
+    Words are lowercased and stripped of punctuation; contractions keep
+    their apostrophe ("didn't" stays one word). Numbers are skipped. A
+    capitalised word not in the list counts as a proper noun and is
+    treated as A1, so names never fail the gate. Glossary words keep
+    their level in the counts (the glossary is the reader's help, it does
+    not hide the word): above_a1 and above_a2 name them with
+    ``in_glossary`` so the command and the gates can tell them apart.
+    """
+    if cefr_levels is None:
+        cefr_levels = load_cefr_list()
+    glossary_terms = {
+        term.get("term_en", "").strip().lower()
+        for term in payload.get("glossary", []) or []
+        if isinstance(term, dict)
+    }
+    order = {level: index for index, level in enumerate(CEFR_LEVELS)}
+    counts = {level: 0 for level in CEFR_LEVELS}
+    words_by_level = {level: {} for level in CEFR_LEVELS}
+    unknown = {}
+    total = 0
+    longest = ""
+    for part in payload.get("parts", []) or []:
+        for sentence in part.get("sentences", []) or []:
+            text = sentence.get("en") if isinstance(sentence, dict) else ""
+            if not isinstance(text, str):
+                continue
+            if len(text.split()) > len(longest.split()):
+                longest = text
+            for raw in re.findall(r"[A-Za-z']+", text):
+                raw = raw.strip("'")
+                if not raw:
+                    continue
+                word = raw.lower()
+                keys = _word_keys(word)
+                level = next((cefr_levels[key] for key in keys if key in cefr_levels), None)
+                if level is None and raw[0].isupper():
+                    level = "A1"  # proper noun, not vocabulary to learn
+                total += 1
+                if level is None:
+                    unknown[word] = unknown.get(word, 0) + 1
+                else:
+                    counts[level] += 1
+                    words_by_level[level][word] = words_by_level[level].get(word, 0) + 1
+    share = {level: (100.0 * count / total if total else 0.0) for level, count in counts.items()}
+    above_a1 = {}
+    for level in CEFR_LEVELS[1:]:
+        for word, count in words_by_level[level].items():
+            above_a1[word] = {"level": level, "count": count, "in_glossary": any(key in glossary_terms for key in _word_keys(word))}
+    for word, count in unknown.items():
+        above_a1[word] = {"level": None, "count": count, "in_glossary": any(key in glossary_terms for key in _word_keys(word))}
+    above_a2 = {
+        word: info for word, info in above_a1.items()
+        if info["level"] is None or order[info["level"]] > order["A2"]
+    }
+    return {
+        "total_words": total,
+        "levels": counts,
+        "words_by_level": words_by_level,
+        "share": share,
+        "unknown_words": unknown,
+        "above_a1": above_a1,
+        "above_a2": above_a2,
+        "longest_sentence": longest,
+    }
+
+
+def vocabulary_errors(payload, cefr_levels=None):
+    """The three submission gates: control, not a promise of level A1.
+
+    Refuses the submission when fewer than MIN_A1_SHARE % of the words are
+    A1, when a word above A2 is missing from the text glossary, or when a
+    sentence is longer than LONG_SENTENCE_WORDS words. Returns Russian
+    error messages; an empty list means the text passes.
+    """
+    profile = profile_vocabulary(payload, cefr_levels=cefr_levels)
+    errors = []
+    if profile["total_words"]:
+        a1_share = profile["share"]["A1"]
+        if a1_share < MIN_A1_SHARE:
+            errors.append(f"Словарь: только {a1_share:.0f} % слов уровня A1, нужно не меньше {MIN_A1_SHARE:.0f} %")
+    uncovered = sorted(
+        word for word, info in profile["above_a2"].items()
+        if not info["in_glossary"]
+    )
+    if uncovered:
+        shown = ", ".join(uncovered[:10])
+        more = "" if len(uncovered) <= 10 else f" (и ещё {len(uncovered) - 10})"
+        errors.append(f"Словарь: слова выше A2 без словарика — {shown}{more}")
+    longest = profile["longest_sentence"]
+    if len(longest.split()) > LONG_SENTENCE_WORDS:
+        errors.append(f"Словарь: предложение длиннее {LONG_SENTENCE_WORDS} слов: {longest}")
+    return errors
 
 
 # --- knowledge cards ----------------------------------------------------------
@@ -342,6 +537,13 @@ def submit_text(data, *, actor="cli"):
         raise EditorialError("Текст: slug — латинские буквы, цифры, дефис и подчёркивание, до 50 символов")
     payload = data.get("payload")
     errors, _ = check_editorial_payload(payload)
+    # Vocabulary gates apply at submission only: already stored revisions
+    # (and published texts) are never re-checked.
+    if isinstance(payload, dict):
+        try:
+            errors += vocabulary_errors(payload)
+        except EditorialError:
+            pass  # a missing word list must not block structural checks
     if "cover" in data and data["cover"] not in Publication.CoverTone.values:
         errors.append(f"Текст: cover — один из тонов {', '.join(Publication.CoverTone.values)}")
     card_refs = data.get("knowledge_cards") or []
