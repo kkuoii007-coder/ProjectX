@@ -1,0 +1,59 @@
+{
+  "schema": "knowledge-card-1",
+  "slug": "aristotle-politics-city",
+  "version": 4,
+  "title": "Aristotle, Politics: the city, the citizen and the rule of law (1252b-1253a, 1280a-1280b)",
+  "sources": [
+    {
+      "title": "Aristotle, Politics. English translation by H. Rackham (Loeb Classical Library 264, 1932), archive.org",
+      "url": "https://archive.org/details/politicsaristot00aris",
+      "sections": "1252b-1253a, 1275a-b, 1280a-1280b, 1287a, 1295b-1296b"
+    },
+    {
+      "title": "Aristotle, Politics, English translation by H. Rackham, Perseus Digital Library markup (tlg0086.tlg035.perseus-eng2), CC BY-SA 4.0",
+      "url": "https://github.com/PerseusDL/canonical-greekLit/tree/master/data/tlg0086/tlg035",
+      "sections": "1.1252b-1.1253b, 3.1275a-3.1275b, 3.1280a-3.1281a, 3.1287a, 4.1295a-4.1296b"
+    }
+  ],
+  "facts": [
+    {"fact_id": "city-exists-by-nature", "locator": "1.1252b", "support_type": "paraphrase", "text": "The city-state comes into existence for the sake of life but exists for the sake of the good life; therefore every city-state exists by nature."},
+    {"fact_id": "nature-as-end", "locator": "1.1252b", "support_type": "paraphrase", "text": "Nature is an end: that which each thing is when its growth is complete we speak of as the nature of each thing, as with a man, a horse or a household; the object for which a thing exists is its end, and its end is its chief good."},
+    {"fact_id": "man-political-animal", "locator": "1.1253a", "support_type": "paraphrase", "text": "It is clear from this that man is by nature a political animal, and that a man who is by nature and not merely by fortune without a city is low in the scale of humanity or above it."},
+    {"fact_id": "political-animal-bees", "locator": "1.1253a", "support_type": "paraphrase", "text": "Man is a political animal in a greater measure than any bee or any gregarious animal; other animals have a voice for pain and pleasure, but speech shows the advantageous and the harmful, the right and the wrong."},
+    {"fact_id": "voice-vs-speech", "locator": "1.1253a", "support_type": "paraphrase", "text": "The mere voice can indicate pain and pleasure and is possessed by the other animals as well; speech is designed to indicate the advantageous and the harmful, and therefore also the right and the wrong."},
+    {"fact_id": "shared-ideas-city", "locator": "1.1253a", "support_type": "paraphrase", "text": "Man alone has perception of good and bad and right and wrong, and it is partnership in these things that makes a household and a city-state."},
+    {"fact_id": "city-prior-to-individual", "locator": "1.1253a", "support_type": "paraphrase", "text": "The city-state is prior in nature to the household and to each of us individually, as the whole is prior to the part: a hand sculptured in stone can be called a hand only in an equivocal sense."},
+    {"fact_id": "beast-or-god", "locator": "1.1253a", "support_type": "paraphrase", "text": "A man who is incapable of entering into partnership, or who is so self-sufficing that he has no need of it, is no part of a state; he must be either a lower animal or a god."},
+    {"fact_id": "not-merely-trade", "locator": "3.1280a", "support_type": "paraphrase", "text": "A state does not exist for the sake of trade and business relations alone: if trade treaties and an alliance against wrong-doing made a city, the Etruscans and the Carthaginians would be virtually citizens of a single state."},
+    {"fact_id": "no-concern-for-others", "locator": "3.1280b", "support_type": "paraphrase", "text": "Under such covenants neither party takes any concern as to the proper moral character of the other; it cares only that the parties do not wrong each other."},
+    {"fact_id": "virtue-city", "locator": "3.1280b", "support_type": "paraphrase", "text": "Any state that is truly so called, and is not a state merely in name, must pay attention to virtue; otherwise the community is merely an alliance."},
+    {"fact_id": "citizen-defined-by-office", "locator": "3.1275a", "support_type": "paraphrase", "text": "A citizen in the absolute sense is defined above all by the right to participate in judicial functions and in office."},
+    {"fact_id": "citizen-definition-democracy", "locator": "3.1275b", "support_type": "paraphrase", "text": "The definition of a citizen applies especially to citizenship in a democracy; under other forms of government it may hold good but will not necessarily do so."},
+    {"fact_id": "law-wisdom-without-desire", "locator": "3.1287a", "support_type": "paraphrase", "text": "He who bids the law rule bids God and reason alone rule, but he who bids a man rule adds the wild animal; appetite and passion warp the rule even of the best men, so the law is wisdom without desire."},
+    {"fact_id": "middle-classes-three", "locator": "4.1295b", "support_type": "paraphrase", "text": "In every state there exist three divisions: the very rich, the very poor, and a third class of those who are between the two; the motive of all wrongdoing is either insolence or malice, so the middle course of life is best."},
+    {"fact_id": "middle-class-best", "locator": "4.1295b", "support_type": "paraphrase", "text": "The political community administered by the middle class is the best, and states can be well governed where the middle class is numerous and stronger than both extremes or at least than one of them."},
+    {"fact_id": "middle-class-reasons", "locator": "4.1295b", "support_type": "paraphrase", "text": "The excessively rich turn to insolence and grand wickedness and know only how to govern in the manner of a master; the very poor turn to malice and petty wickedness and know only how to submit to government of a servile kind; the middle class is least inclined to shun office and to covet it, so the extreme states are cities of slaves and masters, not of free men."},
+    {"fact_id": "middle-free-from-faction", "locator": "4.1296a", "support_type": "paraphrase", "text": "The middle form of constitution is the best because it alone is free from faction: where the middle class is numerous, factions and party divisions among the citizens are least likely to occur."},
+    {"fact_id": "lawgivers-from-middle", "locator": "4.1296a", "support_type": "paraphrase", "text": "It is a significant fact that the best lawgivers have been from among the middle citizens: Solon, Lycurgus, Charondas, and almost the greatest number of the other lawgivers."}
+  ],
+  "pitfalls": [
+    "Rackham translates polis as 'city-state'. Do not render it as 'state' in the abstract sense or as 'country'.",
+    "'Man is by nature a political animal' is Aristotle's argument from speech: only man perceives good and bad and right and wrong, and partnership in these makes a household and a city-state (1253a). Do not present it as a bare slogan.",
+    "The claim that the city is prior to the individual is about nature and function, not time. Aristotle says the city grows from households and villages (1252b); do not add claims about who came first in history.",
+    "'Either a lower animal or a god' is Rackham's wording (1253a); a text may paraphrase it, but must not present it as a quotation from the Greek.",
+    "The citizen definition is given with Aristotle's own remark that it applies especially to a democracy (1275b); do not present it as universal for every constitution.",
+    "The praise of the middle class is Aristotle's argument about stability, moderation and freedom from faction (1295b-1296a); it is not a modern sociological claim about income.",
+    "'The law is wisdom without desire' is Rackham's phrasing of Aristotle's statement that law is reason free from passion (1287a). Quote it only as a rendering; keep 'wisdom' and 'reason' uses consistent and marked as a translation.",
+    "The bee comparison is Aristotle's own ('more than any bee or any gregarious animal', 1253a); bees serve the argument from speech, they are not a claim about animal politics.",
+    "The argument about trade treaties stands in Book III (1280a-1280b): the Etruscan and Carthaginian example is Aristotle's hypothetical on 1280a, not a report about actual agreements, and the page turn to 1280b brings the conclusion about virtue.",
+    "Glossary entries that explain general terms (nature, office, citizen) must either restate facts of this card or be marked as the compiler's explanation, not as Aristotle's own words.",
+    "This card covers the Rackham Loeb translation. Any wording quoted in a text must not pretend to be Greek quotations from Aristotle.",
+    "Locators in this card are Bekker pages (book.page, as in Politics 1.1253a) verified against the Perseus markup by word-for-word phrases of Rackham; line numbers inside pages are not certified."
+  ],
+  "verification": {
+    "status": "verified",
+    "method": "ai",
+    "checked_on": "2026-11-19",
+    "note_ru": "В версии 4 места всех фактов сверены с разметкой Perseus (tlg0086.tlg035.perseus-eng2.xml, перевод Г. Рэкхема, лицензия CC BY-SA 4.0): каждая страница Беккера подтверждена дословной фразой Рэкхема, найденной на этой странице разметки. Исправлены места версии 3: пример с этрусками и карфагенянами стоит на 1280a (не 1280b31–1281a3), довод о богатых и бедных — на 1295b (не 1296b), свобода от распрей и лучшие законодатели — на 1296a (не 1296b). Добавлены положения-опоры текста «Why do people live in cities?»: голос и слова, общие представления создают семью и город, торговым партнёрам не важно, каковы люди другого города, настоящий город обращает внимание на добродетель. Номера строк внутри страниц не сверены и в локаторах не названы. Человек карточку не вычитывал: решение владельца от 18.11.2026."
+  }
+}

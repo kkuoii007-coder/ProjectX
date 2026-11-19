@@ -24,7 +24,7 @@ from apps.ai.models import AIJob, ProviderAttempt, QualityReport
 from apps.ai.services import ReviewNotAllowed, claim_job, create_review_job, execute_job
 from apps.accounts.forms import RegisterForm
 from apps.credits.models import BudgetBucket, CreditTransaction
-from apps.library.editorial import EditorialError, canonical_hash, check_editorial_payload, load_card, submit_text, vocabulary_errors
+from apps.library.editorial import EditorialError, canonical_hash, check_editorial_payload, load_card, profile_vocabulary, submit_text, vocabulary_errors
 from apps.library.models import KnowledgeCard, Publication
 from apps.library.services import PublicationBlocked, publication_slug, publish_revision
 from apps.operations.models import AuditEvent
@@ -35,7 +35,7 @@ TEXT_FILE = CONTENT / "texts" / "what-does-it-mean-to-be-brave.json"
 CARD_FILE = CONTENT / "cards" / "plato-laches-courage-v1.json"
 # sha256 of the canonical payload. The first text is loaded unchanged: any
 # edit to the file, however small, must be deliberate and change this value.
-FIRST_TEXT_HASH = "5f9566a053401379fd463af911e2e56a973213743532f9d64b95626ed1d56eee"
+FIRST_TEXT_HASH = "787111c0cc57b9ea90677c805dd806a7ec5428ea6bf2c3ead30734a8fb7f7c78"
 
 PASS_REVIEW = {
     "verdict": "pass",
@@ -204,6 +204,37 @@ class VocabularyGatesTests(EditorialBase):
         payload["glossary"].append({"term_en": "abandon", "explanation_en": "To leave without help.", "translation_ru": "оставлять"})
         payload["parts"][3]["sentences"][0] = {"en": "They abandon the first answer.", "ru": "Они оставляют первый ответ."}
         self.assertEqual(vocabulary_errors(payload), [])
+
+    def test_multiword_glossary_covers_its_words(self):
+        payload = text_data()["payload"]
+        # "political" (A2) rides inside the glossed phrase "political animal":
+        # the reader meets it inside the explained term.
+        payload["glossary"].append({"term_en": "political animal", "explanation_en": "An animal that lives with others in a city.", "translation_ru": "политическое животное"})
+        payload["parts"][3]["sentences"][0] = {"en": "Man is a political animal.", "ru": "Человек — политическое животное."}
+        self.assertEqual(vocabulary_errors(payload), [])
+        profile = profile_vocabulary(payload)
+        self.assertTrue(profile["above_a1"]["political"]["in_glossary"])
+
+    def test_form_takes_the_lowest_level_of_its_base_words(self):
+        payload = text_data()["payload"]
+        # "means" lists as a noun B2 and as the verb mean A1: the A1 verb
+        # must not be charged with the noun's level.
+        payload["parts"][3]["sentences"][0] = {"en": "This means one thing.", "ru": "Это значит одно."}
+        self.assertEqual(vocabulary_errors(payload), [])
+        profile = profile_vocabulary(payload)
+        self.assertNotIn("means", profile["above_a1"])
+
+    def test_capitalised_title_is_not_vocabulary(self):
+        payload = text_data()["payload"]
+        # "Politics" as a book title is a proper noun, not a B1 word.
+        payload["parts"][3]["sentences"][0] = {"en": "The book is called Politics.", "ru": "Книга называется «Политика»."}
+        profile = profile_vocabulary(payload)
+        self.assertNotIn("politics", profile["above_a1"])
+        # But a lowercase form keeps its list level.
+        payload["parts"][3]["sentences"][0] = {"en": "He wrote about politics.", "ru": "Он писал о политике."}
+        profile = profile_vocabulary(payload)
+        self.assertIn("politics", profile["above_a1"])
+        self.assertEqual(profile["above_a1"]["politics"]["level"], "B1")
 
     def test_long_sentence_is_refused(self):
         payload = text_data()["payload"]

@@ -224,6 +224,7 @@ IRREGULAR_FORMS = {
     "knew": "know", "spoke": "speak", "ran": "run", "sat": "sit",
     "stood": "stand", "saw": "see", "fought": "fight", "thought": "think",
     "better": "good", "best": "good", "worse": "bad", "worst": "bad",
+    "wrote": "write", "meant": "mean",
 }
 
 
@@ -309,6 +310,12 @@ def profile_vocabulary(payload, cefr_levels=None):
         for term in payload.get("glossary", []) or []
         if isinstance(term, dict)
     }
+    # Words of multiword terms ("political animal") are glossed too: the
+    # reader meets them inside the explained phrase.
+    glossary_words = set()
+    for term in glossary_terms:
+        if " " in term:
+            glossary_words.update(word for word in term.split() if word)
     order = {level: index for index, level in enumerate(CEFR_LEVELS)}
     counts = {level: 0 for level in CEFR_LEVELS}
     words_by_level = {level: {} for level in CEFR_LEVELS}
@@ -322,15 +329,27 @@ def profile_vocabulary(payload, cefr_levels=None):
                 continue
             if len(text.split()) > len(longest.split()):
                 longest = text
-            for raw in re.findall(r"[A-Za-z']+", text):
+            tokens = re.findall(r"[A-Za-z']+", text)
+            first_word = tokens[0].lower() if tokens else ""
+            for raw in tokens:
                 raw = raw.strip("'")
                 if not raw:
                     continue
                 word = raw.lower()
                 keys = _word_keys(word)
-                level = next((cefr_levels[key] for key in keys if key in cefr_levels), None)
-                if level is None and raw[0].isupper():
-                    level = "A1"  # proper noun, not vocabulary to learn
+                if raw[0].isupper() and word != first_word:
+                    # A capital away from the sentence start is a name or a
+                    # title ("Politics", the book) — not vocabulary to learn.
+                    level = "A1"
+                else:
+                    # A form can list several base words ("means" is a noun
+                    # B2 and the verb mean A1): take the lowest level, the
+                    # same way a headword takes the lowest among its parts
+                    # of speech.
+                    found = [cefr_levels[key] for key in keys if key in cefr_levels]
+                    level = min(found, key=lambda item: order[item]) if found else None
+                    if level is None and raw[0].isupper():
+                        level = "A1"  # proper noun at the sentence start
                 total += 1
                 if level is None:
                     unknown[word] = unknown.get(word, 0) + 1
@@ -341,9 +360,9 @@ def profile_vocabulary(payload, cefr_levels=None):
     above_a1 = {}
     for level in CEFR_LEVELS[1:]:
         for word, count in words_by_level[level].items():
-            above_a1[word] = {"level": level, "count": count, "in_glossary": any(key in glossary_terms for key in _word_keys(word))}
+            above_a1[word] = {"level": level, "count": count, "in_glossary": any(key in glossary_terms or key in glossary_words for key in _word_keys(word))}
     for word, count in unknown.items():
-        above_a1[word] = {"level": None, "count": count, "in_glossary": any(key in glossary_terms for key in _word_keys(word))}
+        above_a1[word] = {"level": None, "count": count, "in_glossary": any(key in glossary_terms or key in glossary_words for key in _word_keys(word))}
     above_a2 = {
         word: info for word, info in above_a1.items()
         if info["level"] is None or order[info["level"]] > order["A2"]
