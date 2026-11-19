@@ -28,8 +28,8 @@
             "ru": "Лахет — воин."
           },
           {
-            "en": "He is a soldier, and a soldier knows war.",
-            "ru": "Он воин, а воин знает войну."
+            "en": "He knows war well.",
+            "ru": "Он хорошо знает войну."
           },
           {
             "en": "Socrates asks him a question.",
@@ -100,8 +100,8 @@
             "ru": "Он рассказывает Лахету об одной давней войне."
           },
           {
-            "en": "People say: in that war, some soldiers ran away first.",
-            "ru": "Говорят: в той войне некоторые воины сначала убежали."
+            "en": "People say: in that war, some soldiers run away first.",
+            "ru": "Говорят: в той войне некоторые воины сначала убегают."
           },
           {
             "en": "Then they turn back and fight.",
@@ -164,8 +164,8 @@
         "title_en": "A bigger question",
         "sentences": [
           {
-            "en": "Socrates does not tell Laches that he is wrong.",
-            "ru": "Сократ не говорит Лахету, что тот неправ."
+            "en": "Socrates does not say: “You are wrong.”",
+            "ru": "Сократ не говорит: «Ты неправ»."
           },
           {
             "en": "He says: “My question was not good.",
@@ -260,8 +260,8 @@
             "ru": "Когда смелость — остаться?"
           },
           {
-            "en": "When is it brave to go?",
-            "ru": "А когда — уйти?"
+            "en": "When is it brave to turn back?",
+            "ru": "А когда — повернуть назад?"
           }
         ]
       }
@@ -269,7 +269,7 @@
     "glossary": [
       {
         "term_en": "brave",
-        "explanation_en": "A brave person is not afraid to do hard things.",
+        "explanation_en": "A person who does something hard or dangerous.",
         "translation_ru": "смелый"
       },
       {
@@ -279,12 +279,12 @@
       },
       {
         "term_en": "fight",
-        "explanation_en": "People fight when they want to hurt each other.",
+        "explanation_en": "To be in a battle against an enemy.",
         "translation_ru": "сражаться, драться"
       }
     ],
     "source_en": "Plato, Laches",
-    "simplification_note_ru": "Платон, «Лахет», разделы 190e–192c и 199e. Это пересказ, а не цитаты. Упрощения: в диалоге участвуют ещё несколько человек; Лахет был полководцем, в тексте он soldier; слова Сократа о тех, кто остаётся на месте, и о тех, кто поворачивает назад (191d–e), стоят в диалоге в конце его речи о море, болезни и бедности, здесь они перенесены раньше; Лахет соглашается со всей этой речью один раз; фразы о трудности первого ответа и вопросы читателю принадлежат составителю.",
+    "simplification_note_ru": "Платон, «Лахет», разделы 190e–192c и 199e. Это пересказ, а не цитаты. Упрощения: в диалоге участвуют ещё несколько человек; место действия - Афины - названо составителем; “He knows war well” - авторское пояснение; “Socrates does not say: You are wrong” - комментарий составителя о ходе диалога; место действия - Афины - названо составителем; Лахет был полководцем, в тексте он soldier; слова Сократа о тех, кто остаётся на месте, и о тех, кто поворачивает назад (191d–e), стоят в диалоге в конце его речи о море, болезни и бедности, здесь они перенесены раньше; Лахет соглашается со всей этой речью один раз; фразы о трудности первого ответа и вопросы читателю принадлежат составителю.",
     "authorship": "ai"
   }
 }
