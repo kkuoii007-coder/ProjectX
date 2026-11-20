@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 from django.conf import settings
 from django.db import transaction
 
+from .lexical import _lexemes
 from .models import SourceChunk, SourceDocument, SourceEdition, SourceWork
 from .perseus import EXTRACTOR_VERSION, SourceFormatError, extract_perseus_tei
 from .retrieval import EDITION_PENDING, EDITION_SOURCE_FIELDS, STRUCTURED, superseded_document_ids
@@ -98,9 +99,20 @@ def load_manifest(path: str) -> dict:
         value = manifest[section].get(name)
         if value and not (isinstance(value, str) and value.startswith(("https://", "http://"))):
             raise ShelfImportError(f"{section}.{name}: ожидается адрес http(s), получено {value!r}")
-    for entry in manifest.get("query_lexicon", {}).get("ru", []):
+    entries = manifest.get("query_lexicon", {}).get("ru", [])
+    for entry in entries:
         if not entry.get("en") or not (entry.get("stems") or entry.get("words")):
             raise ShelfImportError(f"Запись словаря без основ или без английских слов: {entry}")
+    # A word such as "few" is a stop word of the 'english' configuration: it
+    # cannot be searched for, and an entry made only of such words would turn
+    # a Russian word into one that is "nowhere on the shelf".
+    lexemes = _lexemes(sorted({term for entry in entries for term in entry["en"]}))
+    for entry in entries:
+        if not any(lexemes[term] for term in entry["en"]):
+            raise ShelfImportError(
+                "Запись словаря, в которой ни одно английское слово не ищется "
+                f"(стоп-слова текстового поиска): {json.dumps(entry, ensure_ascii=False)}"
+            )
     related = manifest.get("related_texts", [])
     if not isinstance(related, list) or not all(isinstance(slug, str) for slug in related):
         raise ShelfImportError("related_texts: ожидается список slug")
@@ -289,6 +301,9 @@ def import_shelf_book(manifest_path: str, *, supersedes=None, dry_run: bool = Fa
             _resolve_supersedes(supersedes)
             return report
         with transaction.atomic():
+            # The same lock as in index_document: the state and the metadata
+            # of the document are read as they are now, not as they were.
+            existing = SourceDocument.objects.select_for_update().get(pk=existing.pk)
             _, report.edition_changed, pending = _sync_edition(manifest, existing)
             metadata = _park(existing, pending, report)
             if metadata != existing.metadata_json:

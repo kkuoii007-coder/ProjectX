@@ -92,6 +92,12 @@ def index_document(document) -> dict:
         return {"indexed": indexed, "state": "failed", "error": exc.code, "message": str(exc)}
 
     with transaction.atomic():
+        # The network phase took time: a corrected manifest may have been
+        # imported meanwhile. Read what the row holds now, under a lock that
+        # the importer takes too, so neither side writes over the other.
+        stored = SourceDocument.objects.select_for_update().filter(pk=document.pk).first()
+        if stored is not None:
+            document.metadata_json = stored.metadata_json
         document.processing_state = SourceDocument.Processing.READY
         update_fields = ["processing_state"]
         if _apply_edition_pending(document):
