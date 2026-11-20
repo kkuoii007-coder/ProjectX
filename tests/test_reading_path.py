@@ -668,8 +668,8 @@ class SourceContractTests(SimpleTestCase):
         self.assertEqual(fork.count("setItem("), 1)
         self.assertIn("window.localStorage.getItem(name)", self.function("readForkState"))
         self.assertIn("window.localStorage.setItem(name, JSON.stringify(state))", self.function("writeForkState"))
-        self.assertEqual(fork.count("readForkState("), 2)  # declared, read once
-        self.assertIn("var stored = readForkState(name);", self.function("restore"))
+        self.assertEqual(fork.count("readForkState("), 2)  # declared, read in one place
+        self.assertIn("var stored = readForkState(name);", self.function("catchUp"))
         self.assertEqual(fork.count("writeForkState("), 3)  # declared; written after an answer and after a link
         for step in ("choose", "openFromHash"):
             self.assertEqual(self.function(step).count("writeForkState(name, state);"), 1)
@@ -694,7 +694,8 @@ class SourceContractTests(SimpleTestCase):
         # What is open stays open: the count of open parts only grows.
         self.assertEqual(len(re.findall(r"state\.upto\s*(?:=|\+=|-=)[^=]", fork)), 3)
         self.assertIn("state.upto += 1;", self.function("advance"))
-        self.assertIn("if (upto >= 1) { state.upto = Math.min(upto, total); }", self.function("restore"))
+        self.assertIn("if (upto >= 1) { state.upto = Math.max(state.upto, Math.min(upto, total)); }", self.function("catchUp"))
+        self.assertIn("var wasClosed = index >= state.upto;", self.function("openFromHash"))  # a link back closes nothing
         self.assertRegex(self.function("openFromHash"), r"if \(wasClosed\) \{\s*state\.upto = index \+ 1;")
         for old in ("is-locked", "has-choice", "data-fork-next", "data-fork-id"):
             self.assertNotIn(old, self.script, old)
@@ -703,13 +704,107 @@ class SourceContractTests(SimpleTestCase):
     def test_a_link_to_a_part_opens_the_text_up_to_it(self):
         fork = self.fork_script()
         self.assertIn("window.addEventListener('hashchange', function () { openFromHash(false); });", fork)
-        self.assertRegex(fork, r"render\(\);\s*openFromHash\(arrivedByLink\(\)\);")  # on load too
+        self.assertRegex(fork, r"refresh\(\);\s*openFromHash\(arrivedByLink\(\)\);")  # on load too
         opening = self.function("openFromHash")
         self.assertIn("/^#part-(\\d+)$/", opening)
         self.assertLess(opening.index("render();"), opening.index("target.scrollIntoView("))  # scroll once the part is open
         # The link answers nothing for the reader.
         self.assertNotIn("answers", opening)
         self.assertNotIn("choose(", opening)
+
+    def test_a_page_never_writes_from_its_memory_alone(self):
+        # The same text can be open in two tabs, or come back from the browser's
+        # "back" cache: a page that is behind must not throw away what is kept.
+        # The behaviour itself is checked in a browser (tools/qa/fork_steps.js,
+        # steps 12 and 13, the `browser` job); here its wiring is pinned.
+        fork = self.fork_script()
+        catch_up = self.function("catchUp")
+        self.assertNotIn("writeForkState", catch_up)  # catching up writes nothing
+        self.assertNotRegex(catch_up, r"state\s*=")  # it adds to the state of the page, never replaces it
+        for step in ("choose", "openFromHash"):
+            body = self.function(step)
+            self.assertEqual(body.count("catchUp();"), 1, step)
+            self.assertLess(body.index("catchUp();"), body.index("writeForkState(name, state);"), step)
+        choose = self.function("choose")
+        # The kept answers first, then the answer of this press on top of them.
+        self.assertLess(choose.index("catchUp();"), choose.index("state.answers[fork.id] = button.getAttribute('data-fork-key');"))
+        self.assertRegex(self.function("refresh"), r"catchUp\(\);\s*render\(\);")
+        self.assertNotIn("writeForkState", self.function("refresh"))
+        self.assertIn("window.addEventListener('storage', function (event) { if (event.key === name) { refresh(); } });", fork)
+        self.assertIn("window.addEventListener('pageshow', function (event) { if (event.persisted) { refresh(); } });", fork)
+
+    def test_the_rules_of_the_chain_are_in_place(self):
+        # Each line here is one rule of the fork. Removing any of them is seen
+        # in a browser (fork_steps.js); these pins make the plain test suite
+        # notice it too.
+        advance = self.function("advance")
+        self.assertIn("if (fork && !state.answers[fork.id]) { break; }", advance)  # no answer: the next part stays closed
+        catch_up = self.function("catchUp")
+        # Only an answer this page offers is taken from what is kept.
+        self.assertIn("var known = fork.buttons.some(function (button) { return button.getAttribute('data-fork-key') === answers[fork.id]; });", catch_up)
+        self.assertIn("if (known) { state.answers[fork.id] = answers[fork.id]; }", catch_up)
+        self.assertEqual(catch_up.count("state.answers[fork.id] ="), 1)
+        # An answer to a fork that is not reached is dropped, after the chain is walked.
+        drop = "forks.forEach(function (fork) { if (fork.after > state.upto) { delete state.answers[fork.id]; } });"
+        self.assertIn(drop, catch_up)
+        self.assertLess(catch_up.index("advance();"), catch_up.index(drop))
+        # Other revisions of this text are cleaned, other texts are left alone.
+        stale = self.function("dropStaleForkStates")
+        self.assertIn("var sameText = FORK_PREFIX + scope.slice(0, scope.lastIndexOf(':') + 1);", stale)
+        self.assertIn("if (name && name.indexOf(sameText) === 0 && name !== FORK_PREFIX + scope) { stale.push(name); }", stale)
+        self.assertIn("stale.forEach(function (name) { storage.removeItem(name); });", stale)
+        self.assertNotIn("clear(", stale)
+        self.assertRegex(self.fork_script(), r"dropStaleForkStates\(scope\);\s*refresh\(\);")
+        # After an answer the focus goes to its line; after a link, to the part.
+        self.assertRegex(self.function("choose"), r"render\(\);[^}]*var line = doc\.getElementById\(button\.getAttribute\('data-fork-choice'\)\);\s*if \(line\) \{ line\.focus\(\); \}")
+        self.assertIn("target.focus({ preventScroll: true });", self.function("openFromHash"))
+        # The end of the text is what the page marks so, and nothing else.
+        self.assertIn("var ends = reader.querySelectorAll('[data-reader-end]');", self.fork_script())
+
+    def test_only_the_marked_end_blocks_wait_for_the_last_part(self):
+        # "Words" and the reader's own tools are on the page from the start.
+        read = next(source for path, source in self.templates.items() if path.name == "read.html" and path.parent.name == "library")
+        marked = re.findall(r"<(\w+)\b([^>]*\bdata-reader-end\b[^>]*)>", read)
+        self.assertEqual([re.search(r'class="([^"]*)"', attrs).group(1) for _, attrs in marked], ["end-block about", "end-block next"])
+        for block in ("terms", "reader-tools"):
+            tag = re.search(r"<section\b[^>]*\bclass=\"end-block " + block + r"\"[^>]*>", read).group(0)
+            self.assertNotIn("data-reader-end", tag, block)
+        # In the stylesheet nothing but print leaves these blocks out.
+        outside_print = self.styles
+        for block in self.media_blocks("print"):
+            outside_print = outside_print.replace(block, "")
+        for selector in re.findall(r"([^{}]+)\{[^{}]*display:\s*none", outside_print):
+            for kept in (".terms", ".end-block", ".reader-tools", ".reader__end", ".about", ".next"):
+                self.assertNotRegex(selector, re.escape(kept) + r"(?![\w-])", selector.strip())
+        # On screen exactly three kinds of things are closed until reached.
+        screen = [block for block in self.media_blocks("screen") if "data-fork-scope" in block][0]
+        closed = re.search(r"([^{}]*:not\(\.is-reached\)[^{}]*)\{\s*display:\s*none;\s*\}", screen).group(1)
+        self.assertEqual(
+            [selector.strip() for selector in closed.split(",")],
+            [
+                ".js [data-fork-scope] .part ~ .part:not(.is-reached)",
+                ".js [data-fork-scope] .choice ~ .choice:not(.is-reached)",
+                ".js [data-fork-scope] [data-reader-end]:not(.is-reached)",
+            ],
+        )
+        self.assertEqual(self.styles.count("is-reached"), 3)
+
+    def test_the_fork_hint_takes_the_colour_of_the_cover_text(self):
+        # The hint stands on the cover tone. Any colour of its own (it was the
+        # grey --ink-3: 1.3:1 on clay) is a contrast failure; the measured
+        # ratios are in fork_steps.js, step 8.
+        rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"(?s)/\*.*?\*/", "", self.styles))
+        hint = [(selector.strip(), body) for selector, body in rules if "choice__hint" in selector or "data-fork-hint" in selector]
+        self.assertGreaterEqual(len(hint), 2)
+        for selector, body in hint:
+            for declaration in ("color", "opacity", "filter", "mix-blend-mode"):
+                self.assertNotRegex(body, r"(?<![\w-])" + declaration + r"\s*:", f"{selector}: {declaration}")
+            self.assertNotIn("--ink-3", body, selector)
+        # The cover gives its text colour to everything inside the fork.
+        choice = "".join(body for selector, body in rules if selector.strip() == ".choice")
+        self.assertRegex(choice, r"(?<![\w-])color:\s*var\(--on-cover\)")
+        self.assertIn("--on-cover: var(--paper);", self.styles)
+        self.assertIn("--paper: #f7f5ef;", self.styles)
 
     def media_blocks(self, kind):
         blocks = []
@@ -777,6 +872,40 @@ class SourceContractTests(SimpleTestCase):
         ready = self.script.index("root.setAttribute('data-js-ready', '')")
         self.assertLess(self.script.index("initForks();"), ready)  # only after every step worked
         self.assertIn("root.removeAttribute('data-js-ready')", self.script)
+
+    def test_a_late_or_broken_script_closes_nothing(self):
+        # Browser checks: fork_steps.js, steps 14 (late) and 15 (broken).
+        bases = [source for path, source in self.templates.items() if path.name in ("base.html", "base_reading.html")]
+        for source in bases:
+            # Giving the page back is remembered on the page itself.
+            self.assertIn("function back(){if(!r.hasAttribute('data-js-ready')){r.classList.remove('js','ui-ru-off');r.setAttribute('data-js-off','')}}", source)
+        start = self.script.index("  function init() {")
+        init = self.script[start:self.script.index("\n  }\n", start)]
+        # A script that comes after that does nothing at all: the reader may be
+        # in the middle of the whole text by now.
+        guard = "if (root.hasAttribute('data-js-off')) { return; }"
+        self.assertIn(guard, init)
+        self.assertLess(init.index(guard), init.index("try {"))
+        for step in ("initGlosses();", "initRuToggle();", "initMenu();", "initForks();", "root.classList.add('js');"):
+            self.assertLess(init.index("try {"), init.index(step), step)
+            self.assertLess(init.index(step), init.index("} catch (error) {"), step)
+        # The js class is set in one place only, when every step has worked.
+        self.assertEqual(self.script.count("classList.add('js')"), 1)
+        self.assertNotIn("data-js-off", self.script.replace(guard, ""))  # the script never takes the mark back
+        # An exception in any step: the js class goes, with everything it hides.
+        handler = init[init.index("} catch (error) {"):]
+        self.assertIn("plainPage();", handler)
+        self.assertNotIn("classList.add", handler)
+        start = self.script.index("  function plainPage() {")
+        plain = self.script[start:self.script.index("\n  }\n", start)]
+        for line in ("root.removeAttribute('data-js-ready');", "root.classList.remove('js');", "root.classList.remove('ui-ru-off');"):
+            self.assertIn(line, plain)
+            self.assertLess(plain.index(line), plain.index("try {"))  # before anything that could fail
+        # Controls shown by the script go away with the js class.
+        self.assertRegex(
+            self.styles,
+            r"html:not\(\.js\) \[data-fork-buttons\],\s*html:not\(\.js\) \[data-fork-hint\],\s*html:not\(\.js\) \[data-ru-toggle\] \{\s*display: none;\s*\}",
+        )
 
     def test_translations_and_fork_lines_hide_only_with_working_script(self):
         hiding = 0

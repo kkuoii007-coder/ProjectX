@@ -1413,6 +1413,14 @@ td form.inline {
   margin-top: 0.15rem;
 }
 
+/* Controls that work only with the script. reader.js shows them; if the page
+   is then given back to plain reading (an error half-way), they go again. */
+html:not(.js) [data-fork-buttons],
+html:not(.js) [data-fork-hint],
+html:not(.js) [data-ru-toggle] {
+  display: none;
+}
+
 .choice__next {
   margin: var(--s-5) 0 0;
 }

@@ -131,7 +131,11 @@
      text and revision (data-fork-scope): another text, or a new revision of
      this one, starts closed. What is open never closes again; an answer can
      be changed. A link to #part-N opens the text up to part N and answers
-     nothing for the reader. Nothing is sent and nothing is scored. */
+     nothing for the reader. Nothing is sent and nothing is scored.
+     The same text can be open twice: in another tab, or as a page the browser
+     kept for the "back" button. So this page never writes from its memory
+     alone: before every change it takes what is kept (catchUp), and it does
+     the same when the other page writes or when it is shown again. */
 
   var FORK_PREFIX = 'pr-fork:';
   var FORK_RETIRED_KEY = 'pr-fork-choices'; // one shared key for every text: no longer read, only removed
@@ -202,11 +206,14 @@
       }
     }
 
-    function restore() {
+    // Take what is kept on the device into the state of this page. The place
+    // never goes back. A kept answer is the later one: every answer is written
+    // at once, so what this page remembers of that fork is older.
+    function catchUp() {
       var stored = readForkState(name);
       if (stored && typeof stored === 'object') {
         var upto = parseInt(stored.upto, 10);
-        if (upto >= 1) { state.upto = Math.min(upto, total); }
+        if (upto >= 1) { state.upto = Math.max(state.upto, Math.min(upto, total)); }
         var answers = stored.answers && typeof stored.answers === 'object' ? stored.answers : {};
         forks.forEach(function (fork) {
           var known = fork.buttons.some(function (button) { return button.getAttribute('data-fork-key') === answers[fork.id]; });
@@ -238,6 +245,7 @@
     }
 
     function choose(fork, button) {
+      catchUp(); // first what another page has kept, then this answer on top of it
       state.answers[fork.id] = button.getAttribute('data-fork-key');
       advance();
       writeForkState(name, state);
@@ -254,13 +262,14 @@
       var target = match ? doc.getElementById('part-' + match[1]) : null;
       var index = parts.indexOf(target);
       if (index < 0) { return; }
+      catchUp();
       var wasClosed = index >= state.upto;
       if (wasClosed) {
         state.upto = index + 1;
         advance();
         writeForkState(name, state);
-        render();
       }
+      render();
       if (wasClosed || arriving) {
         target.setAttribute('tabindex', '-1');
         target.focus({ preventScroll: true }); // Tab goes on from this part, as after any jump inside a page
@@ -285,11 +294,20 @@
       fork.group.hidden = false;
     });
 
+    function refresh() {
+      catchUp();
+      render();
+    }
+
     dropStaleForkStates(scope);
-    restore();
-    render();
+    refresh();
     openFromHash(arrivedByLink());
     window.addEventListener('hashchange', function () { openFromHash(false); });
+    // Another tab with this text has written its place: follow it. Nothing is
+    // written here and the page does not move.
+    window.addEventListener('storage', function (event) { if (event.key === name) { refresh(); } });
+    // The browser shows a page it kept (the "back" button): it may be behind.
+    window.addEventListener('pageshow', function (event) { if (event.persisted) { refresh(); } });
   }
 
   /* ---- rotating topic examples on the workshop entry form ------------------ */
@@ -311,7 +329,26 @@
     window.setInterval(showNext, 4000);
   }
 
+  // The page without the script: nothing is hidden, and the controls the
+  // script has shown so far go away with the js class (main.css).
+  function plainPage() {
+    root.removeAttribute('data-js-ready');
+    root.classList.remove('js');
+    root.classList.remove('ui-ru-off');
+    try {
+      // Sentences are plain prose again, not buttons that open nothing.
+      Array.prototype.forEach.call(doc.querySelectorAll('.s[data-gloss]'), function (sentence) {
+        ['role', 'tabindex', 'aria-controls', 'aria-expanded'].forEach(function (name) { sentence.removeAttribute(name); });
+      });
+    } catch (error) { /* the page is readable already */ }
+  }
+
   function init() {
+    // The script came after the page was given back to the reader (the inline
+    // script in <head> waits three seconds). The reader may be in the middle
+    // of the whole text by now: nothing closes under them. The page stays
+    // plain until the next load.
+    if (root.hasAttribute('data-js-off')) { return; }
     try {
       initGlosses();
       initRuToggle();
@@ -324,9 +361,7 @@
       root.classList.add('js');
     } catch (error) {
       // A broken script must not hide anything: back to the readable no-JS page.
-      root.removeAttribute('data-js-ready');
-      root.classList.remove('js');
-      root.classList.remove('ui-ru-off');
+      plainPage();
     }
   }
 
