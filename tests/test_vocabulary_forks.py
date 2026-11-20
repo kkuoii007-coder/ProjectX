@@ -24,7 +24,7 @@ from apps.library.editorial import (
     vocabulary_errors,
 )
 
-from .test_editorial_path import FIRST_TEXT_HASH, text_data
+from .test_editorial_path import FIRST_TEXT_HASH, EditorialBase, text_data
 
 TEXTS = Path(settings.BASE_DIR) / "content" / "texts"
 # The published payloads: a change needs a new paid review, so it must be deliberate.
@@ -160,11 +160,45 @@ class ForkLinesTests(SimpleTestCase):
         errors = vocabulary_errors(self.payload)
         self.assertTrue(any(f"предложение длиннее {LONG_SENTENCE_WORDS} слов" in error and "run away" in error for error in errors), errors)
 
+    def test_a_mark_inside_a_fork_sentence_does_not_cut_it(self):
+        for question in (
+            "Is the man who runs away and then says “Why?” and turns back and fights and wins in the end brave?",
+            "Is the man who runs away and then... turns back and fights and wins in the end still a brave man?",
+            "Is the man who runs away and then… turns back and fights and wins in the end still a brave man?",
+        ):
+            with self.subTest(question=question):
+                self.assertGreater(len(question.split()), LONG_SENTENCE_WORDS)
+                payload = copy.deepcopy(self.payload)
+                payload["parts"][0]["fork"]["prompt"]["en"] = question
+                errors = vocabulary_errors(payload)
+                self.assertTrue(any("предложение длиннее" in error for error in errors), errors)
+
+    def test_quoted_sentences_in_a_fork_line_are_separate_sentences(self):
+        line = "Two cities buy and sell. They say: “We will not hurt you.” Are they one city now?"
+        self.fork["prompt"]["en"] = line
+        self.assertEqual(vocabulary_errors(self.payload), [])
+        self.assertIn("Are they one city now?", list(measured_sentences(self.payload)))
+
     def test_part_sentence_is_still_measured_whole(self):
         # An entry of a part is one sentence: two sentences in it do not get a longer limit.
         self.payload["parts"][3]["sentences"][0] = {"en": "He said one word and went home again. He said one more word and then went home.", "ru": "—"}
         errors = vocabulary_errors(self.payload)
         self.assertTrue(any("предложение длиннее" in error for error in errors), errors)
+
+
+class MissingWordListTests(EditorialBase):
+    def test_submission_is_refused_when_the_word_list_is_missing(self):
+        from unittest.mock import patch
+
+        from apps.library.editorial import EditorialError
+        from apps.workshop.models import Revision
+
+        before = Revision.objects.count()
+        with patch("apps.library.editorial.load_cefr_list", side_effect=EditorialError("Список словаря не найден: x.csv")):
+            with self.assertRaises(EditorialError) as ctx:
+                self.submit()
+        self.assertTrue(any("проверка невозможна" in message for message in ctx.exception.messages), ctx.exception.messages)
+        self.assertEqual(Revision.objects.count(), before)
 
 
 class CapitalLetterTests(SimpleTestCase):
@@ -187,6 +221,28 @@ class CapitalLetterTests(SimpleTestCase):
         ):
             with self.subTest(text=text):
                 self.assertEqual(above_a1(text)["abandon"]["level"], "B1")
+
+    def test_straight_quote_after_a_bracket_a_dash_or_a_comma_opens(self):
+        for text in (
+            'He says ("Abandon the city") again.',
+            'He says —"Abandon the city" again.',
+            'He says,"Abandon the city" again.',
+            "He says „Abandon the city“ again.",
+            "He says ‹Abandon the city› again.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(above_a1(text)["abandon"]["level"], "B1")
+
+    def test_word_after_an_ellipsis_is_checked(self):
+        self.assertEqual(above_a1("He waits… Abandon the city.")["abandon"]["level"], "B1")
+        self.assertEqual(above_a1("He waits... Abandon the city.")["abandon"]["level"], "B1")
+
+    def test_repeated_first_word_with_a_capital_is_still_a_word(self):
+        # The check before this change looked such a word up; it must not get weaker.
+        payload = one_line("Abandon the men and then Abandon the men, he says.")
+        payload["glossary"].append({"term_en": "abandon", "explanation_en": "To leave without help.", "translation_ru": "оставлять"})
+        self.assertEqual(profile_vocabulary(payload)["above_a1"]["abandon"]["count"], 2)
+        self.assertTrue(any("слов уровня A1" in error for error in vocabulary_errors(payload)))
 
     def test_word_at_a_sentence_start_inside_a_line_is_checked(self):
         self.assertEqual(above_a1("Read on. Abandon the plan.")["abandon"]["level"], "B1")

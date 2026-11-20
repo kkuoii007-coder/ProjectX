@@ -111,6 +111,24 @@ class WithdrawnTextTests(ReadingBase):
                 self.assertEqual(response.status_code, 404)
                 self.assertNotIn("No texts here yet", page(response))
 
+    def test_thinker_and_collection_show_only_published_texts(self):
+        # One text of the thinker and of the collection is published, the other is withdrawn.
+        from apps.library.models import CollectionItem
+
+        city = publish_city_text(self.admin)
+        Publication.objects.filter(pk=city.pk).update(thinker=self.socrates.thinker)
+        CollectionItem.objects.create(collection=self.socrates.collections.get(), publication=city, position=2)
+        for url in (self.thinker_url, self.collection_url):
+            with self.subTest(url=url, state="both published"):
+                self.assertEqual(sorted(item["publication"].slug for item in self.client.get(url).context["items"]), sorted([CITY_SLUG, SOCRATES]))
+        self.withdraw()
+        for url in (self.thinker_url, self.collection_url):
+            with self.subTest(url=url, state="one withdrawn"):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual([item["publication"].slug for item in response.context["items"]], [CITY_SLUG])
+                self.assertNotIn(f"/read/{SOCRATES}/", page(response))
+
     def test_withdrawal_twice_changes_nothing(self):
         self.withdraw()
         self.assertIn("уже снято", self.withdraw())

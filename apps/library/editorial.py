@@ -295,8 +295,12 @@ def load_cefr_list(path=None):
 # A capital letter marks a name only inside a sentence. After the end of a
 # sentence, a colon or an opening quote the capital is
 # spelling, and the word is checked on the list like any other.
-_OPENING_MARKS = "\u201c\u2018\u00ab"
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])[\"'\u201d\u2019\u00bb)]*\s+")
+_OPENING_MARKS = "\u201c\u2018\u00ab\u201e\u2039"
+# A fork line is cut where a sentence really ends: a full stop, "?" or "!"
+# followed by a capital letter. "He says “Why?” and turns back" and
+# "and then... turns back" stay one sentence, so the length gate cannot
+# be passed by a mark in the middle.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?\u2026])[\"'\u201d\u2019\u00bb)]*\s+(?=[\"'\u201c\u2018\u00ab\u201e(]*[A-Z])")
 
 
 def _starts_a_sentence(text, start, previous_end):
@@ -304,13 +308,14 @@ def _starts_a_sentence(text, start, previous_end):
     if previous_end is None:
         return True
     gap = text[previous_end:start]
-    if any(mark in gap for mark in ".!?:"):
+    if any(mark in gap for mark in ".!?:\u2026"):
         return True
     if any(mark in gap for mark in _OPENING_MARKS):
         return True
-    # A straight quote opens when it follows a space: said "We ... / said 'We ...
-    # (the apostrophe is part of the word pattern, so it sits at ``start``).
-    return bool(re.search(r"(^|\s)\"$", gap)) or text[start] == "'"
+    # A straight quote opens when it stands right before the word and not
+    # right after a letter: said "We, ("We, —"We. After a letter it closes.
+    # The apostrophe is part of the word pattern, so it sits at ``start``.
+    return bool(re.search(r"(^|[^A-Za-z0-9])\"$", gap)) or text[start] == "'"
 
 
 def reader_lines(payload):
@@ -392,6 +397,7 @@ def profile_vocabulary(payload, cefr_levels=None):
     part_words = part_a1 = 0
     for kind, text in reader_lines(payload):
         previous_end = None
+        first_word = None
         for match in re.finditer(r"[A-Za-z']+", text):
             raw = match.group().strip("'")
             if not raw:
@@ -399,7 +405,12 @@ def profile_vocabulary(payload, cefr_levels=None):
             opens = _starts_a_sentence(text, match.start(), previous_end)
             previous_end = match.end()
             word = raw.lower()
-            if raw[0].isupper() and not opens:
+            if first_word is None:
+                first_word = word
+            # The word that opens the line is a word wherever it is repeated
+            # with a capital ("Abandon ... and then Abandon ..."): this was
+            # the rule before, and the check must not get weaker.
+            if raw[0].isupper() and not opens and word != first_word:
                 # A capital inside a sentence is a name or a title — not
                 # vocabulary to learn.
                 level = "A1"
@@ -643,8 +654,10 @@ def submit_text(data, *, actor="cli"):
     if isinstance(payload, dict):
         try:
             errors += vocabulary_errors(payload)
-        except EditorialError:
-            pass  # a missing word list must not block structural checks
+        except EditorialError as exc:
+            # No word list means no vocabulary check: say so and refuse,
+            # instead of letting the text through unchecked.
+            errors.append(f"Словарь: проверка невозможна — {exc}")
     if "cover" in data and data["cover"] not in Publication.CoverTone.values:
         errors.append(f"Текст: cover — один из тонов {', '.join(Publication.CoverTone.values)}")
     card_refs = data.get("knowledge_cards") or []
