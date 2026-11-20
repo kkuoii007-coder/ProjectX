@@ -27,7 +27,7 @@ REVIEW_PROMPT_VERSION = "review-v2"
 REPAIR_PROMPT_VERSION = "repair-v2"
 EDITORIAL_REVIEW_PROMPT_VERSION = "review-v3"
 # Answer with a source (docs/spec/prompts/grounded-answer.md).
-GROUNDED_PROMPT_VERSION = "grounded-v1"
+GROUNDED_PROMPT_VERSION = "grounded-v2"
 GROUNDED_REVIEW_PROMPT_VERSION = "review-grounded-v1"
 
 
@@ -392,7 +392,7 @@ no explanations outside JSON. If the request is outside philosophy or would
 require inventing facts, return outcome "refused" with a short message_ru."""
 
 
-# --- answer with a source (grounded-v1) ---------------------------------------
+# --- answer with a source (grounded-v2) ---------------------------------------
 # The reader asks about a book on the shelf; the server has already found
 # the fragments. The schema is built per request: a source id can only be
 # one of the ids that were really sent.
@@ -410,7 +410,8 @@ def grounded_schema(source_ids):
             "additionalProperties": False,
             "required": ["outcome", "series", "message_ru"],
             "properties": {
-                "outcome": {"type": "string", "enum": ["series", "no_source", "needs_clarification", "refused"]},
+                # Only these two: a refusal in the model's own words is not an outcome of this path.
+                "outcome": {"type": "string", "enum": ["series", "no_source"]},
                 "message_ru": {"type": "string", "maxLength": 500},
                 "series": {
                     **series,
@@ -499,8 +500,9 @@ above still hold.
 
 Return only JSON matching the provided schema. No HTML, no Markdown fences,
 no explanations outside JSON. With outcome "series" return 3 to 5 parts.
-With any other outcome return `series` with empty titles, `parts: []` and
-`glossary: []`, and explain in message_ru."""
+The only other outcome is "no_source": return `series` with empty titles,
+`parts: []` and `glossary: []`, and say in message_ru what is missing. The
+reader does not see message_ru."""
 
 # review-grounded-v1: the reviewer of an answer with sources.
 GROUNDED_REVIEW_SYSTEM_PROMPT = """You are an independent reviewer of a short
@@ -686,7 +688,7 @@ class OpenRouterProvider:
     grounded_review_prompt_version = GROUNDED_REVIEW_PROMPT_VERSION
 
     def generate(self, job, sources=None, correction=None):
-        """With `sources`: an answer with sources (grounded-v1), the only
+        """With `sources`: an answer with sources (grounded-v2), the only
         way a text is made. Without: the old free-form series, reached only
         by the switched-off `ask` kind."""
         model = settings.AI_GENERATION_MODEL
@@ -763,8 +765,8 @@ class OpenRouterProvider:
             return {"outcome": AIJob.Outcome.DELIVERED, "payload": decision.get("series") or {}, "answer": ""}
         if outcome == "no_source":
             return {"outcome": AIJob.Outcome.NO_SOURCE, "payload": {}, "answer": message}
-        if outcome == "needs_clarification":
-            return {"outcome": AIJob.Outcome.CLARIFICATION, "payload": {}, "answer": message}
+        # Anything else is not an outcome of this path: the server refuses
+        # with its own fixed text and charges nothing (services.py).
         return {"outcome": AIJob.Outcome.REFUSED, "payload": {}, "answer": message}
 
     # --- review / repair (review-v2 / repair-v2 prompts) ---------------------

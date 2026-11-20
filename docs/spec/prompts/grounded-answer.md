@@ -1,6 +1,6 @@
 # Prompt: ответ с источником
 
-Версии: grounded-v1 (ответ), review-grounded-v1 (проверка ответа).
+Версии: grounded-v2 (ответ), review-grounded-v1 (проверка ответа).
 Код: `apps/ai/openrouter.py` — `GROUNDED_SYSTEM_PROMPT`, `GROUNDED_REVIEW_SYSTEM_PROMPT`,
 `GROUNDED_REPAIR_ADDENDUM`. Тексты ниже совпадают с кодом дословно; это проверяет тест
 `tests/test_answer.py::PromptDocumentTests`. Меняешь промпт — меняй оба места и версию.
@@ -10,7 +10,7 @@
 [sources-and-rag.md](../docs/sources-and-rag.md)) и передаёт их модели как `sources`.
 Если опор нет, модель не вызывается вовсе.
 
-## Ответ: grounded-v1
+## Ответ: grounded-v2
 
 Отдельный system prompt. Модель: `AI_GENERATION_MODEL`.
 
@@ -19,7 +19,7 @@
 `correction: {violations: [...]}`.
 
 Выход: строгая JSON-схема `grounded_answer`, которую сервер строит на каждый запрос
-(`grounded_schema(source_ids)`): `outcome` — `series | no_source | needs_clarification | refused`,
+(`grounded_schema(source_ids)`): `outcome` — только `series | no_source`,
 `message_ru`, `series` в форме обычного GenerationResult, где у каждой части есть обязательное
 `sources` — от 1 до 3 элементов `{id, quote}`. `id` ограничен перечислением (`enum`) тех
 идентификаторов, которые сервер действительно передал: назвать другой фрагмент схема не даёт.
@@ -74,8 +74,9 @@ above still hold.
 
 Return only JSON matching the provided schema. No HTML, no Markdown fences,
 no explanations outside JSON. With outcome "series" return 3 to 5 parts.
-With any other outcome return `series` with empty titles, `parts: []` and
-`glossary: []`, and explain in message_ru.
+The only other outcome is "no_source": return `series` with empty titles,
+`parts: []` and `glossary: []`, and say in message_ru what is missing. The
+reader does not see message_ru.
 ```
 
 Что сервер проверяет сам, не полагаясь на модель (`apps/ai/grounding.py::check_answer`):

@@ -792,15 +792,9 @@ def grounded(parts=None, outcome="series", message=""):
     return {"outcome": outcome, "series": series, "message_ru": message}
 
 
-@override_settings(**LIVE)
-class LiveGroundedContractTests(AnswerBase):
-    """The real OpenRouterProvider: what is sent and what the calls cost."""
-
-    def live(self, *answers):
-        replies = [fake_completion(answer) for answer in answers]
-        return mock.patch("apps.ai.openrouter._pricing_for", side_effect=lambda model: PRICES[model]), mock.patch(
-            "apps.ai.openrouter._chat_completion", side_effect=replies
-        )
+class LiveBase(AnswerBase):
+    """The real OpenRouterProvider with `_chat_completion` and the prices
+    patched. Subclasses set the live settings (`override_settings(**LIVE)`)."""
 
     def parts_from(self, job_sources, quote_words=12):
         parts = []
@@ -823,16 +817,32 @@ class LiveGroundedContractTests(AnswerBase):
         only after the search: `answers` is a function of them."""
         project, job = self.ask(question, run=False)
         calls = []
+        self.call_options = []  # the keyword arguments of each call (max_tokens)
 
-        def chat(model, system, user_payload, schema):
+        def chat(model, system, user_payload, schema, **options):
             calls.append((model, system, user_payload, schema))
-            return fake_completion(answers(user_payload, len(calls)))
+            self.call_options.append(options)
+            reply = answers(user_payload, len(calls))
+            if isinstance(reply, Exception):
+                raise reply
+            return fake_completion(reply)
 
         with mock.patch("apps.ai.openrouter._pricing_for", side_effect=lambda model: PRICES[model]), mock.patch("apps.ai.openrouter._chat_completion", side_effect=chat):
             execute_job(claim_next_job())
         job.refresh_from_db()
         project.refresh_from_db()
         return project, job, calls
+
+
+@override_settings(**LIVE)
+class LiveGroundedContractTests(LiveBase):
+    """The real OpenRouterProvider: what is sent and what the calls cost."""
+
+    def live(self, *answers):
+        replies = [fake_completion(answer) for answer in answers]
+        return mock.patch("apps.ai.openrouter._pricing_for", side_effect=lambda model: PRICES[model]), mock.patch(
+            "apps.ai.openrouter._chat_completion", side_effect=replies
+        )
 
     def test_generation_sends_question_and_fragments_and_gets_sources_back(self):
         def answers(user_payload, number):
@@ -866,7 +876,7 @@ class LiveGroundedContractTests(AnswerBase):
         self.assertIn("sources", part_schema["required"])
         self.assertEqual(part_schema["properties"]["sources"]["items"]["properties"]["id"]["enum"], [source["id"] for source in supports])
         self.assertEqual((part_schema["properties"]["sources"]["minItems"], part_schema["properties"]["sources"]["maxItems"]), (1, 3))
-        self.assertIn("no_source", schema["schema"]["properties"]["outcome"]["enum"])
+        self.assertEqual(schema["schema"]["properties"]["outcome"]["enum"], ["series", "no_source"])
 
         # The reviewer gets the candidate and the fragments its parts cite.
         model, system, user_payload, schema = calls[1]
@@ -900,8 +910,12 @@ class LiveGroundedContractTests(AnswerBase):
         # The owner's spending is recorded as usual.
         self.assertEqual(ProviderAttempt.objects.get(job=job).cost_usd, Decimal("0.020000"))
         self.assertEqual(BudgetBucket.objects.order_by("period").first().consumed_usd, Decimal("0.020000"))
-        self.assertIn("Фрагменты говорят о другом.", Message.objects.get(project=project, kind="explanation").body)
-        self.assertIn("We have no source for this yet.", self.project_page(project))
+        # The reader gets the fixed text; the model's own words are kept for the owner's report only.
+        self.assertEqual(Message.objects.get(project=project, kind="explanation").body, grounding.NO_SOURCE_MESSAGE)
+        self.assertEqual(job.result_reference["model_explanation"], "Фрагменты говорят о другом.")
+        html = self.project_page(project)
+        self.assertIn("We have no source for this yet.", html)
+        self.assertNotIn("Фрагменты говорят о другом.", html)
 
     def test_rejected_answer_gets_one_correction_with_the_violations(self):
         def answers(user_payload, number):

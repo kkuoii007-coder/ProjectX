@@ -318,6 +318,9 @@ class Command(BaseCommand):
         explanation = Message.objects.filter(project=record["project"], role="assistant", kind="explanation", job=job).order_by("-created_at").first()
         if explanation:
             lines.append(f"- Объяснение читателю: {explanation.body}")
+        model_explanation = (job.result_reference or {}).get("model_explanation")
+        if model_explanation:
+            lines.append(f"- Пояснение модели, не проверено (читателю не показывается): {model_explanation}")
 
         revision = record["project"].head_revision
         if revision is None:

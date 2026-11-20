@@ -41,6 +41,11 @@ VALIDATION_FAILED_MESSAGE = (
     "Ответ не удалось подтвердить отрывками из книги: ссылки на источник не прошли проверку. "
     "Текст не создан, кредиты не списаны. Попробуйте задать вопрос иначе."
 )
+UNEXPECTED_OUTCOME_MESSAGE = "Ответ не получился: модель вернула не то, что ожидалось. Текст не создан, кредиты не списаны. Попробуйте задать вопрос ещё раз."
+# What the model says about its refusal is kept for the owner's report
+# only (`result_reference["model_explanation"]`): it is not checked, so
+# the reader never sees it.
+MODEL_EXPLANATION_CHARS = 500
 
 
 class SearchUnavailable(Exception):

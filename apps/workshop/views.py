@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from apps.ai import grounding
 from apps.ai.grounding import has_sources
 from apps.ai.models import AIJob
 from apps.ai.services import EDIT_NOT_SUPPORTED_MESSAGE, InsufficientCredits, JobConflict, JobError, QueueFull, create_job
@@ -108,7 +109,8 @@ def _creation_job(project):
 def _no_text_state(job):
     """Why a project has no text, from its `generate` job: `waiting`,
     `no_source`, `search_unavailable`, `source_validation_failed`,
-    `explained` (the model asked to clarify or refused) or `failed`."""
+    `explained` (an old job where the model asked to clarify or refused;
+    its words are not shown) or `failed`."""
     if job is None or job.status in (AIJob.Status.QUEUED, AIJob.Status.RUNNING):
         return "waiting"
     if job.outcome == AIJob.Outcome.NO_SOURCE:
@@ -118,6 +120,14 @@ def _no_text_state(job):
     if job.outcome in (AIJob.Outcome.CLARIFICATION, AIJob.Outcome.REFUSED):
         return "explained"
     return "failed"
+
+
+# The second line of a final screen without a text: a fixed server text
+# chosen by the state of the job. Nothing the model wrote is shown.
+REFUSAL_LINES = {
+    "source_validation_failed": grounding.VALIDATION_FAILED_MESSAGE,
+    "unexpected_model_outcome": grounding.UNEXPECTED_OUTCOME_MESSAGE,
+}
 
 
 def _nothing_was_charged(job) -> bool:
@@ -154,7 +164,7 @@ def _project_context(request, project):
         # A final screen without a text: no versions, no discussion.
         context["shelf_books"] = shelf_books()
         context["no_charge"] = _nothing_was_charged(job)
-        context["explanation"] = Message.objects.filter(project=project, owner=request.user, role="assistant", kind="explanation").order_by("-created_at").first()
+        context["refusal_line"] = REFUSAL_LINES.get(job.error_code if job is not None else "", "")
     return context
 
 

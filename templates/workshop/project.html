@@ -97,7 +97,7 @@
     {% elif state == 'failed' or state == 'explained' or state == 'source_validation_failed' %}
     <section class="refusal" aria-labelledby="refusal-title">
       <h2 class="refusal__title" id="refusal-title" lang="en">The text was not made.<span class="ru-ui" lang="ru">Текст не создан.</span></h2>
-      {% if explanation %}<p class="refusal__line" lang="ru">{{ explanation.body }}</p>{% endif %}
+      {% if refusal_line %}<p class="refusal__line" lang="ru">{{ refusal_line }}</p>{% endif %}
       {% if no_charge %}<p class="refusal__line" lang="en">No credits were taken.<span class="ru-ui" lang="ru">Кредиты не списаны.</span></p>{% endif %}
       <p class="refusal__next">{% if shelf_books %}<a class="btn" href="{% url 'workshop:create_project' %}" lang="en">Ask another question</a><span class="ru-ui" lang="ru">Задать другой вопрос</span>{% else %}<a class="btn" href="{% url 'library:home' %}" lang="en">Go to the library</a><span class="ru-ui" lang="ru">Перейти в библиотеку</span>{% endif %}</p>
     </section>

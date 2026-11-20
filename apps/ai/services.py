@@ -679,7 +679,11 @@ def _execute_generate_job(job, provider):
     - failed `search_unavailable`: the vector half did not run and the
       text half found no support — not the same as "no source";
     - `no_charge_failure` + `source_validation_failed`: the sources of the
-      answer failed the check twice.
+      answer failed the check twice;
+    - `no_charge_failure` + `unexpected_model_outcome`: the model returned
+      neither a series nor `no_source`.
+    The reader sees fixed server texts; the model's own words about a
+    refusal are kept in `result_reference["model_explanation"]` only.
     """
     from . import grounding
     from .models import QualityReport
@@ -716,13 +720,18 @@ def _execute_generate_job(job, provider):
     attempts = getattr(provider, "_attempts", None) or []
     with transaction.atomic():
         outcome = result["outcome"]
+        # The reader gets fixed server texts only. What the model wrote
+        # about a refusal is unchecked: it goes to the owner's report.
+        model_explanation = str(result.get("answer") or "").strip()[: grounding.MODEL_EXPLANATION_CHARS]
         if outcome == AIJob.Outcome.NO_SOURCE:
-            reason = (result.get("answer") or "").strip()
-            explain(grounding.NO_SOURCE_MESSAGE + (f" Пояснение модели: {reason}" if reason else ""))
+            explain(grounding.NO_SOURCE_MESSAGE)
             job.result_reference = {"explanation": "saved", "refusal_line": refusal_line}
         elif outcome != AIJob.Outcome.DELIVERED:
-            # needs_clarification / refused: the model's free explanation.
-            explain(result.get("answer") or "Текст не создан")
+            # This path has two outcomes, `series` and `no_source`; anything
+            # else from the model is a failure that costs the reader nothing.
+            outcome = AIJob.Outcome.NO_CHARGE_FAILURE
+            explain(grounding.UNEXPECTED_OUTCOME_MESSAGE)
+            job.error_code = "unexpected_model_outcome"
             job.result_reference = {"explanation": "saved"}
         elif not checked.ok:
             outcome = AIJob.Outcome.NO_CHARGE_FAILURE
@@ -750,6 +759,8 @@ def _execute_generate_job(job, provider):
                 factual_state=review["review"].get("factual_state", "unverified"),
                 eligibility_state="ineligible",
             )
+        if model_explanation and outcome != AIJob.Outcome.DELIVERED:
+            job.result_reference["model_explanation"] = model_explanation
         job.result_reference["search"] = retrieval.summary()
         _save_provider_attempts(job, provider, "completed")
         settle_reservation(job=job, charge=outcome == AIJob.Outcome.DELIVERED)

@@ -61,7 +61,7 @@ review=fail завершаются без списания; техническа
 (до MAX_QUESTION_CHARS = 500 символов, по-русски или по-английски; более длинный
 вопрос отклоняется формой, а не обрезается). В input_json.instruction уходит вопрос
 целиком, заголовок проекта — его первые 200 символов. Цена и вид задачи прежние.
-Промпты: [grounded-answer.md](../prompts/grounded-answer.md), версии grounded-v1 и
+Промпты: [grounded-answer.md](../prompts/grounded-answer.md), версии grounded-v2 и
 review-grounded-v1. Код: apps/ai/grounding.py, apps/ai/services.py
 (_execute_generate_job).
 
@@ -129,7 +129,7 @@ threshold/model).
 ## Форматы ответов
 
 GenerationResult: outcome series/needs_clarification/refused; для ответа с
-источником (схема grounded_answer) — ещё no_source, а у каждой части обязательное
+источником (схема grounded_answer) — только series и no_source, а у каждой части обязательное
 sources: 1–3 объекта {id, quote}.
 EditResult: outcome edited/needs_broader_edit/needs_clarification/refused.
 AskResult: outcome answered/needs_clarification/refused.
