@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
@@ -9,7 +9,7 @@ from apps.operations.models import Report
 from apps.sources.shelf import book_for_text
 
 from .models import Collection, Favorite, Publication, Thinker
-from .presenters import about_text, cover_lines, outline, publication_item, reader_parts, reader_terms, titles, tone
+from .presenters import about_text, cover_lines, fork_scope, outline, publication_item, reader_parts, reader_terms, titles, tone
 
 REPORT_CATEGORIES = {
     "factual_error": "Фактическая ошибка",
@@ -87,11 +87,13 @@ def read(request, slug):
     shown = titles(payload)
     if not shown["title_en"]:
         shown["title_en"] = publication.slug
+    parts = reader_parts(payload)
     context = {
         "publication": publication,
         **shown,
         "tone": tone(publication),
-        "parts": reader_parts(payload),
+        "parts": parts,
+        "fork_scope": fork_scope(publication, parts),
         "outline": outline(payload),
         "terms": reader_terms(payload),
         "about": about_text(payload),
@@ -109,6 +111,10 @@ def read(request, slug):
 def thinker(request, slug):
     thinker = get_object_or_404(Thinker, slug=slug)
     publications = _published().filter(thinker=thinker).order_by("-published_at", "slug")
+    if not publications.exists():
+        # A thinker with no published text has no page: an empty shell
+        # would stay reachable after the last text is withdrawn.
+        raise Http404("No published texts for this thinker")
     context = {"thinker": thinker, "publications": publications, "items": [publication_item(p) for p in publications]}
     return render(request, "library/thinker.html", context)
 
@@ -117,6 +123,8 @@ def thinker(request, slug):
 def collection(request, slug):
     collection = get_object_or_404(Collection, slug=slug)
     publications = collection.publications.filter(status=Publication.Status.PUBLISHED).select_related("revision", "thinker")
+    if not publications.exists():
+        raise Http404("No published texts in this collection")
     context = {"collection": collection, "publications": publications, "items": [publication_item(p) for p in publications]}
     return render(request, "library/collection.html", context)
 

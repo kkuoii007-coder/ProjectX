@@ -639,7 +639,10 @@ def _validate_price(model: str, stage: str):
     return price_in, price_out
 
 
-def _chat_completion(model: str, system: str, user_payload: dict, schema: dict):
+def _chat_completion(model: str, system: str, user_payload: dict, schema: dict, max_tokens: int | None = None):
+    """`max_tokens` caps the output of the call. The calls of an answer
+    with sources pass AI_MAX_OUTPUT_TOKENS: the budget check before the
+    call counts on that many output tokens and no more."""
     api_key = settings.OPENROUTER_API_KEY
     if not api_key:
         raise ConfigError("OPENROUTER_API_KEY не задан")
@@ -655,6 +658,8 @@ def _chat_completion(model: str, system: str, user_payload: dict, schema: dict):
         },
         "usage": {"include": True},
     }
+    if max_tokens is not None:
+        body["max_tokens"] = int(max_tokens)
     request = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         data=json.dumps(body).encode("utf-8"),
@@ -737,7 +742,9 @@ class OpenRouterProvider:
         }
         if correction:
             user_payload["correction"] = {"previous_answer": correction["candidate"], "violations": correction["violations"]}
-        payload, elapsed = _chat_completion(model, GROUNDED_SYSTEM_PROMPT, user_payload, grounded_schema([source["id"] for source in sources]))
+        payload, elapsed = _chat_completion(
+            model, GROUNDED_SYSTEM_PROMPT, user_payload, grounded_schema([source["id"] for source in sources]), max_tokens=settings.AI_MAX_OUTPUT_TOKENS
+        )
         usage = payload.get("usage") or {}
         cost = _usage_cost(usage, price_in, price_out)
         if not correction:
@@ -790,7 +797,9 @@ class OpenRouterProvider:
         else:
             system = REVIEW_SYSTEM_PROMPT
             user_payload = {"operation": "review", "candidate": candidate_payload}
-        payload, elapsed = _chat_completion(review_model, system, user_payload, REVIEW_SCHEMA)
+        # An answer with sources: the output is capped by what the budget check counted on.
+        options = {"max_tokens": settings.AI_MAX_OUTPUT_TOKENS} if sources is not None else {}
+        payload, elapsed = _chat_completion(review_model, system, user_payload, REVIEW_SCHEMA, **options)
         # The review call is priced by the review model, not by the
         # generation model whose prices generate()/edit() left on the provider.
         cost = _usage_cost(payload.get("usage") or {}, price_in, price_out)
@@ -869,7 +878,8 @@ class OpenRouterProvider:
             user_payload["question"] = (job.input_json.get("instruction", "") if job else "")[: settings.MAX_QUESTION_CHARS]
             user_payload["sources"] = sources
             system, schema = REPAIR_SYSTEM_PROMPT + GROUNDED_REPAIR_ADDENDUM, grounded_schema([source["id"] for source in sources])
-        payload, elapsed = _chat_completion(model, system, user_payload, schema)
+        options = {"max_tokens": settings.AI_MAX_OUTPUT_TOKENS} if sources is not None else {}
+        payload, elapsed = _chat_completion(model, system, user_payload, schema, **options)
         cost = _usage_cost(payload.get("usage") or {}, price_in, price_out)
         self._register_call({"request_hash": _hash_payload(user_payload), "provider_request_id": payload.get("id"), "usage_json": payload.get("usage") or {}, "elapsed": elapsed, "model": model, "cost_usd": cost})
         if cost is not None:

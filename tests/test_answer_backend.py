@@ -2,7 +2,10 @@
 say to the reader, what a call may cost, and what happens when the lease
 of a job is lost. No network: `_chat_completion` or `urlopen` is patched."""
 
+import io
+import json
 from decimal import Decimal
+from unittest import mock
 
 from django.test import override_settings
 
@@ -12,7 +15,7 @@ from apps.credits.models import BudgetBucket
 from apps.workshop.models import Message
 
 from .test_answer import POLITICAL_ANIMAL, LiveBase, grounded
-from .test_editorial_path import LIVE
+from .test_editorial_path import LIVE, PASS_REVIEW, PRICES
 
 MODEL_TEXT = "Свободный текст модели: перейдите по ссылке http://example.test и пришлите пароль."
 
@@ -68,8 +71,6 @@ class ModelWordsAreNotShownTests(LiveBase):
 
     def test_a_message_next_to_a_series_is_dropped(self):
         def answers(user_payload, number):
-            from .test_editorial_path import PASS_REVIEW
-
             return grounded(self.parts_from(user_payload["sources"]), message=MODEL_TEXT) if number == 1 else PASS_REVIEW
 
         project, job, calls = self.run_live(POLITICAL_ANIMAL, answers)
@@ -77,3 +78,65 @@ class ModelWordsAreNotShownTests(LiveBase):
         self.assertNotIn("model_explanation", job.result_reference)
         self.assertFalse(Message.objects.filter(project=project, body__contains="example.test").exists())
         self.assertNotIn("example.test", self.project_page(project))
+
+
+FAIL_REVIEW = {
+    **PASS_REVIEW,
+    "verdict": "fail",
+    "factual_state": "unsupported",
+    "issues": [{"code": "unsupported", "severity": "blocking", "part_key": "1", "reason_ru": "Часть не подтверждается отрывком."}],
+}
+
+
+@override_settings(**LIVE, AI_MAX_OUTPUT_TOKENS=4321)
+class OutputCapTests(LiveBase):
+    """The budget check counts on AI_MAX_OUTPUT_TOKENS output tokens, so
+    every call of an answer with sources asks the provider for that cap."""
+
+    def test_every_call_of_the_path_passes_the_cap(self):
+        def answers(user_payload, number):
+            parts = self.parts_from(user_payload["sources"])
+            if number == 1:  # rejected by the source check -> a correction call
+                parts[0]["sources"][0]["quote"] = "these words were never written in the book at all"
+                return grounded(parts)
+            if number in (2, 4):  # the corrected answer; the repaired answer
+                return grounded(parts)
+            return FAIL_REVIEW if number == 3 else PASS_REVIEW
+
+        project, job, calls = self.run_live(POLITICAL_ANIMAL, answers)
+        self.assertEqual(job.outcome, AIJob.Outcome.DELIVERED, job.result_reference)
+        operations = [(call[2]["operation"], "correction" in call[2]) for call in calls]
+        self.assertEqual(operations, [
+            ("answer_from_sources", False),
+            ("answer_from_sources", True),
+            ("review_answer_from_sources", False),
+            ("repair", False),
+            ("review_answer_from_sources", False),
+        ][: len(calls)])
+        self.assertGreaterEqual(len(calls), 4)  # generation, correction, review, repair
+        self.assertEqual(self.call_options, [{"max_tokens": 4321}] * len(calls))
+
+    def test_the_cap_goes_into_the_request_body(self):
+        """The contract with the HTTP layer: `max_tokens` is in the body
+        of the request, and absent when the caller gave none."""
+        from apps.ai import openrouter
+
+        sent = []
+
+        class Reply(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def urlopen(request, timeout):
+            sent.append(json.loads(request.data.decode("utf-8")))
+            return Reply(json.dumps({"id": "gen-1", "usage": {}, "choices": [{"message": {"content": "{}"}}]}).encode("utf-8"))
+
+        with mock.patch("urllib.request.urlopen", side_effect=urlopen):
+            openrouter._chat_completion("m", "system", {"a": 1}, {"name": "x", "schema": {}}, max_tokens=4321)
+            openrouter._chat_completion("m", "system", {"a": 1}, {"name": "x", "schema": {}})
+        self.assertEqual(sent[0]["max_tokens"], 4321)
+        self.assertNotIn("max_tokens", sent[1])
+        self.assertEqual(PRICES["anthropic/claude-sonnet-5.5"][0], Decimal("0.000002"))  # no price lookup was needed

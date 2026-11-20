@@ -3,7 +3,8 @@
 {% block description %}{{ title_en }} A text in simple English. Tap a sentence for Russian.{% endblock %}
 {% block body_class %}page-reader{% endblock %}
 {% block content %}
-<article class="reader" data-reader>
+{# With forks the text opens step by step (reader.js): the scope names this text and this revision, so answers never pass to another text. #}
+<article class="reader" data-reader{% if fork_scope %} data-fork-scope="{{ fork_scope }}"{% endif %}>
   <header class="page-head page-head--reader">
     <div class="wrap">
       <h1{% if title_lang == 'ru' %} lang="ru"{% endif %}>{{ title_en }}</h1>
@@ -14,7 +15,7 @@
   </header>
 
   {% for part in parts %}
-  <section class="part" id="part-{{ part.number }}" aria-labelledby="part-{{ part.number }}-title">
+  <section class="part" id="part-{{ part.number }}" data-part="{{ part.number }}" aria-labelledby="part-{{ part.number }}-title">
     <div class="wrap reader__col">
       <header class="part__head">
         <h2 class="part__title" id="part-{{ part.number }}-title"><span class="part__num">{{ part.number }}</span>{{ part.title_en }}</h2>
@@ -26,8 +27,8 @@
     </div>
   </section>
   {% if part.fork %}
-  {# A prepared question, not a test: nothing is sent, saved or scored. #}
-  <section class="choice" data-fork data-fork-id="fork-{{ part.number }}" data-fork-next="{% if part.fork.next_part %}{{ part.fork.next_part }}{% endif %}" aria-labelledby="{{ part.fork.prompt.id }}-title">
+  {# A prepared question, not a test: nothing is sent or scored. The answer opens the next part and stays on this device only. #}
+  <section class="choice" data-fork aria-labelledby="{{ part.fork.prompt.id }}-title">
     {% include 'includes/fork.html' %}
     <div class="wrap reader__col">
       <h2 class="choice__title" id="{{ part.fork.prompt.id }}-title">{{ part.fork.title_en|default:"A question for you" }}</h2>
@@ -37,7 +38,7 @@
         <button class="choice__btn" type="button" data-fork-choice="{{ option.id }}-line" data-fork-key="{{ option.key }}" aria-pressed="false">{{ option.label_en }}<span class="ru-ui" lang="ru">{% if option.key == 'yes' %}Да{% elif option.key == 'no' %}Нет{% else %}Сомневаюсь{% endif %}</span></button>
         {% endfor %}
       </div>
-      <p class="choice__hint" data-fork-hint>Choose an answer to read on. Any answer is fine.<span class="ru-ui" lang="ru">Выберите ответ, чтобы читать дальше. Подойдёт любой.</span></p>
+      {% if part.fork.next_part %}<p class="choice__hint" data-fork-hint hidden>Choose an answer to read on. Any answer is fine.<span class="ru-ui" lang="ru">Выберите ответ, чтобы читать дальше. Подойдёт любой.</span></p>{% endif %}
       <div class="choice__options" aria-live="polite">
         {% for option in part.fork.options %}
         <div class="choice__option" id="{{ option.id }}-line" tabindex="-1">
@@ -66,7 +67,7 @@
     </section>
     {% endif %}
 
-    <section class="end-block about" aria-labelledby="about-title">
+    <section class="end-block about" data-reader-end aria-labelledby="about-title">
       <h2 class="end-block__title" id="about-title">About this text<span class="ru-ui" lang="ru">Об этом тексте</span></h2>
       {% if about.byline_en or about.source_en %}<p class="about__source">{{ about.byline_en }}{% if about.byline_en and about.source_en %} {% endif %}{% if about.source_en %}Source: {{ about.source_en }}.{% endif %}</p>{% endif %}
       {% if about.note_ru %}<p class="about__note" lang="ru">{{ about.note_ru }}</p>{% endif %}
@@ -75,7 +76,7 @@
       {% if shelf_book %}<p class="ask-book"><a href="{% url 'workshop:create_project' %}">Ask about this book</a><span class="ru-ui" lang="ru">Задать вопрос об этой книге: {% if shelf_book.label_ru %}{{ shelf_book.label_ru }}{% else %}{{ shelf_book.label }}{% endif %}</span></p>{% endif %}
     </section>
 
-    <section class="end-block next" aria-label="What is next">
+    <section class="end-block next" data-reader-end aria-label="What is next">
       {% if next %}
       <p class="next__label">Next question<span class="ru-ui" lang="ru">Следующий вопрос</span></p>
       <p class="next__title"><a href="{{ next.url }}"{% if next.title_lang == 'ru' %} lang="ru"{% endif %}>{{ next.title_en }}</a>{% if next.title_ru %}<span class="ru-ui" lang="ru">{{ next.title_ru }}</span>{% endif %}</p>

@@ -1402,23 +1402,24 @@ td form.inline {
   font: 600 var(--fs-1)/1.3 var(--font-ui);
 }
 
-.js .choice__label,
-.js .choice__option {
-  display: none;
-}
-
-.js .choice__option.is-chosen {
-  display: block;
-}
-
+/* The hint stands on the cover tone, so it takes the colour of the cover's
+   text (paper), like every other line there: 7.1:1 on clay, 8.5:1 on sea,
+   7.3:1 on olive. */
 .choice__hint {
   margin: var(--s-4) 0 0;
-  font: 400 var(--fs-0)/1.4 var(--font-ui);
-  color: var(--ink-3);
+  font: 500 var(--fs-1)/1.35 var(--font-ui);
 }
 
 .choice__hint .ru-ui {
-  display: block;
+  margin-top: 0.15rem;
+}
+
+/* Controls that work only with the script. reader.js shows them; if the page
+   is then given back to plain reading (an error half-way), they go again. */
+html:not(.js) [data-fork-buttons],
+html:not(.js) [data-fork-hint],
+html:not(.js) [data-ru-toggle] {
+  display: none;
 }
 
 .choice__next {
@@ -1429,18 +1430,39 @@ td form.inline {
   margin-top: var(--s-2);
 }
 
-.js .choice__next {
-  display: none;
+/* A part opened by a link (#part-N) takes the focus so that Tab goes on
+   from it; a block of text shows no focus ring. */
+.part:focus {
+  outline: none;
 }
 
-.js .choice.has-choice .choice__next {
-  display: block;
-}
+/* A text with forks opens answer by answer (reader.js). Everything that is
+   closed is closed here, on screen and under a working script only: without
+   JS and in print the whole text is there, with the lines of all answers.
+   Before the script has run, the first part and the first fork are open. */
+@media screen {
+  .js .choice__label,
+  .js .choice__option {
+    display: none;
+  }
 
-/* The part after a fork waits for an answer. JS-only: without JS and in
-   print the whole text is visible. */
-.js .part.is-locked {
-  display: none;
+  .js .choice__option.is-chosen {
+    display: block;
+  }
+
+  .js .choice__next {
+    display: none;
+  }
+
+  .js .choice.is-passed .choice__next {
+    display: block;
+  }
+
+  .js [data-fork-scope] .part ~ .part:not(.is-reached),
+  .js [data-fork-scope] .choice ~ .choice:not(.is-reached),
+  .js [data-fork-scope] [data-reader-end]:not(.is-reached) {
+    display: none;
+  }
 }
 
 .reader__end {
@@ -2306,15 +2328,15 @@ td form.inline {
   .hint,
   .choice__buttons,
   .choice__hint,
+  .choice__next,
   .reader-tools,
   .fork {
     display: none !important;
   }
 
-  /* Every part is printed, also the one JS keeps closed on screen. */
-  .js .part.is-locked {
-    display: block;
-  }
+  /* Every part, every fork with the lines of all its answers and the end of
+     the text are printed: what the script closes is closed on screen only
+     (see the @media screen block of the reader). */
 
   body,
   .page-head,

@@ -16,6 +16,13 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # The Embedding table below has a column of type "vector", so the
+        # pgvector extension must exist before this migration creates it.
+        # It used to be enabled only in 0002, and a clean database failed
+        # here with: type "vector" does not exist. A database where this
+        # migration is already applied is not touched: Django does not run
+        # an applied migration again. 0002 stays as it was (IF NOT EXISTS).
+        migrations.RunSQL(sql="CREATE EXTENSION IF NOT EXISTS vector", reverse_sql=migrations.RunSQL.noop),
         migrations.CreateModel(
             name='SourceEdition',
             fields=[
