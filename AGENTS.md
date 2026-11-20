@@ -61,7 +61,7 @@ ink on paper. A translation opens under its own sentence, at any width.
 - `static/css/fonts.css` + `static/fonts/` — Literata (text, headings) and
   Golos Text (UI, translations), self-hosted woff2 with their OFL texts.
   No external font/CDN requests.
-- `static/js/reader.js` — the only JS file (~165 lines, no dependencies), plus
+- `static/js/reader.js` — the only JS file of the site (~370 lines, no dependencies), plus
   one inline line in `<head>` that sets the `js` and `ui-ru-off` classes before
   the first paint and removes them if the file fails to load. Pages must
   stay usable without JS: translations visible, menu expanded.
@@ -84,10 +84,36 @@ ink on paper. A translation opens under its own sentence, at any width.
   or variable expressions across newlines. All POST forms must render a real
   CSRF input, including forms inside `details`.
 - Test 390/768/1440 plus 320px, script failure and no-JS. On 390x844 the first
-  English sentence of a text is visible without scrolling. A fork in the text
-  (`data-fork`) reveals one prepared line per choice; it is not a form and
-  nothing is sent, saved or scored; without JS it is plain paragraphs. Keep
+  English sentence of a text is visible without scrolling. Keep
   English/Russian learning payloads unchanged.
+- A text with forks (`data-fork`) opens as a chain: first only part 1 and its
+  question; each answer shows its prepared line, the next part and the next
+  question; `About this text` and `Next question` come with the last part,
+  `Words` and the reader's tools are always there. `reader.js` draws the whole
+  page from one state in one `render()`; do not open or close single blocks
+  elsewhere. The state lives on the device only, under `pr-fork:<slug>:<revision
+  hash>` (`data-fork-scope`): another text and a new revision start closed.
+  What is open never closes; an answer can be changed; `#part-N` opens the
+  text up to part N and answers nothing. A fork is not a form: nothing is sent
+  or scored. Closing is CSS under `.js` inside `@media screen` only, so
+  without JS, on a script failure and in print the whole text is there with
+  the lines of all answers. The same text can be open in two tabs or come
+  back from the browser's "back" cache: a page never writes its state from
+  memory alone, it first takes what is kept (`catchUp()`: the place never goes
+  back, kept answers stay, the answer just pressed wins for its fork), and it
+  repaints on `storage` and on `pageshow` with `persisted`. If `reader.js`
+  comes after the inline script has given the page back (three seconds, mark
+  `data-js-off`), it does nothing: the page stays plain until the next load,
+  nothing closes under the reader. An exception in `init` ends in
+  `plainPage()`: no `js` class, no script-only controls.
+- Browser check of the reader: `tools/qa/fork_steps.js` (Playwright, Chromium).
+  It is the `browser` job of `.github/workflows/tests.yml` and is not part of
+  the Django suite; Playwright is installed by the job, the project has no
+  `package.json`. Its data comes from `tools/qa/seed_browser_check.py`, which
+  publishes with a stub reviewer and refuses to run unless
+  `PR_BROWSER_CHECK=1`, `AI_PROVIDER=fake`, `LIVE_AI_ENABLED` off and `DEBUG`
+  on. Never run it on a server. A change of fork behaviour needs a step there;
+  source pins in `tests/test_reading_path.py` are the second line only.
 - Tables use `.table-scroll` with a focusable labelled region. Keep auth,
   registration, error, empty and workshop states at the same quality as home.
 - Use isolated PostgreSQL + pgvector and `AI_PROVIDER=fake`,

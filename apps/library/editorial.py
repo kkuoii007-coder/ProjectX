@@ -292,16 +292,88 @@ def load_cefr_list(path=None):
     return levels
 
 
-def profile_vocabulary(payload, cefr_levels=None):
-    """Word profile of the English sentences: counts, shares, details.
+# A capital letter marks a name only inside a sentence. After the end of a
+# sentence, a colon or an opening quote the capital is
+# spelling, and the word is checked on the list like any other.
+_OPENING_MARKS = "\u201c\u2018\u00ab\u201e\u2039"
+# A fork line is cut where a sentence really ends: a full stop, "?" or "!"
+# followed by a capital letter. "He says “Why?” and turns back" and
+# "and then... turns back" stay one sentence, so the length gate cannot
+# be passed by a mark in the middle.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?\u2026])[\"'\u201d\u2019\u00bb)]*\s+(?=[\"'\u201c\u2018\u00ab\u201e(]*[A-Z])")
 
-    Words are lowercased and stripped of punctuation; contractions keep
-    their apostrophe ("didn't" stays one word). Numbers are skipped. A
-    capitalised word not in the list counts as a proper noun and is
-    treated as A1, so names never fail the gate. Glossary words keep
-    their level in the counts (the glossary is the reader's help, it does
-    not hide the word): above_a1 and above_a2 name them with
-    ``in_glossary`` so the command and the gates can tell them apart.
+
+def _starts_a_sentence(text, start, previous_end):
+    """True when the word at ``start`` opens the text, a sentence or a quote."""
+    if previous_end is None:
+        return True
+    gap = text[previous_end:start]
+    if any(mark in gap for mark in ".!?:\u2026"):
+        return True
+    if any(mark in gap for mark in _OPENING_MARKS):
+        return True
+    # A straight quote opens when it stands right before the word and not
+    # right after a letter: said "We, ("We, —"We. After a letter it closes.
+    # The apostrophe is part of the word pattern, so it sits at ``start``.
+    return bool(re.search(r"(^|[^A-Za-z0-9])\"$", gap)) or text[start] == "'"
+
+
+def reader_lines(payload):
+    """Every English line the reader gets, as (kind, text).
+
+    ``sentence`` is one entry of a part: it is one sentence by the rules
+    of the text file and is measured whole. ``fork`` is the question or an
+    answer line of a fork; such a line is a small scene of several short
+    sentences, so its length is measured sentence by sentence.
+    """
+    for part in payload.get("parts", []) or []:
+        if not isinstance(part, dict):
+            continue
+        for sentence in part.get("sentences", []) or []:
+            text = sentence.get("en") if isinstance(sentence, dict) else None
+            if isinstance(text, str):
+                yield "sentence", text
+        fork = part.get("fork")
+        if not isinstance(fork, dict):
+            continue
+        prompt = fork.get("prompt")
+        if isinstance(prompt, dict) and isinstance(prompt.get("en"), str):
+            yield "fork", prompt["en"]
+        for option in fork.get("options", []) or []:
+            if isinstance(option, dict) and isinstance(option.get("en"), str):
+                yield "fork", option["en"]
+
+
+def measured_sentences(payload):
+    """The sentences the length gate measures, in reading order."""
+    for kind, text in reader_lines(payload):
+        if kind == "fork":
+            for piece in _SENTENCE_SPLIT.split(text):
+                if piece.strip():
+                    yield piece.strip()
+        else:
+            yield text
+
+
+def profile_vocabulary(payload, cefr_levels=None):
+    """Word profile of the English lines: counts, shares, details.
+
+    Counted: the sentences of the parts and the lines of the forks (the
+    question and the three answer lines; the fixed button words Yes, No
+    and Not sure are interface, not text). Words are lowercased and
+    stripped of punctuation; contractions keep their apostrophe ("didn't"
+    stays one word). Numbers are skipped.
+
+    A capitalised word inside a sentence is a name or a title ("Politics",
+    the book) and is treated as A1, so names never fail the gate. At the
+    start of a sentence, after a colon and after an opening quote the
+    capital is only spelling: the word is looked up on the
+    list, and only a word the list does not know is taken for a name.
+
+    Glossary words keep their level in the counts (the glossary is the
+    reader's help, it does not hide the word): above_a1 and above_a2 name
+    them with ``in_glossary`` so the command and the gates can tell them
+    apart.
     """
     if cefr_levels is None:
         cefr_levels = load_cefr_list()
@@ -321,41 +393,52 @@ def profile_vocabulary(payload, cefr_levels=None):
     words_by_level = {level: {} for level in CEFR_LEVELS}
     unknown = {}
     total = 0
-    longest = ""
-    for part in payload.get("parts", []) or []:
-        for sentence in part.get("sentences", []) or []:
-            text = sentence.get("en") if isinstance(sentence, dict) else ""
-            if not isinstance(text, str):
+    fork_words = 0
+    part_words = part_a1 = 0
+    for kind, text in reader_lines(payload):
+        previous_end = None
+        first_word = None
+        for match in re.finditer(r"[A-Za-z']+", text):
+            raw = match.group().strip("'")
+            if not raw:
                 continue
-            if len(text.split()) > len(longest.split()):
-                longest = text
-            tokens = re.findall(r"[A-Za-z']+", text)
-            first_word = tokens[0].lower() if tokens else ""
-            for raw in tokens:
-                raw = raw.strip("'")
-                if not raw:
-                    continue
-                word = raw.lower()
-                keys = _word_keys(word)
-                if raw[0].isupper() and word != first_word:
-                    # A capital away from the sentence start is a name or a
-                    # title ("Politics", the book) — not vocabulary to learn.
-                    level = "A1"
-                else:
-                    # A form can list several base words ("means" is a noun
-                    # B2 and the verb mean A1): take the lowest level, the
-                    # same way a headword takes the lowest among its parts
-                    # of speech.
-                    found = [cefr_levels[key] for key in keys if key in cefr_levels]
-                    level = min(found, key=lambda item: order[item]) if found else None
-                    if level is None and raw[0].isupper():
-                        level = "A1"  # proper noun at the sentence start
-                total += 1
-                if level is None:
-                    unknown[word] = unknown.get(word, 0) + 1
-                else:
-                    counts[level] += 1
-                    words_by_level[level][word] = words_by_level[level].get(word, 0) + 1
+            opens = _starts_a_sentence(text, match.start(), previous_end)
+            previous_end = match.end()
+            word = raw.lower()
+            if first_word is None:
+                first_word = word
+            # The word that opens the line is a word wherever it is repeated
+            # with a capital ("Abandon ... and then Abandon ..."): this was
+            # the rule before, and the check must not get weaker.
+            if raw[0].isupper() and not opens and word != first_word:
+                # A capital inside a sentence is a name or a title — not
+                # vocabulary to learn.
+                level = "A1"
+            else:
+                # A form can list several base words ("means" is a noun
+                # B2 and the verb mean A1): take the lowest level, the
+                # same way a headword takes the lowest among its parts
+                # of speech.
+                found = [cefr_levels[key] for key in _word_keys(word) if key in cefr_levels]
+                level = min(found, key=lambda item: order[item]) if found else None
+                if level is None and raw[0].isupper():
+                    level = "A1"  # a name the list does not know
+            total += 1
+            if kind == "fork":
+                fork_words += 1
+            else:
+                part_words += 1
+                part_a1 += level == "A1"
+            if level is None:
+                unknown[word] = unknown.get(word, 0) + 1
+            else:
+                counts[level] += 1
+                words_by_level[level][word] = words_by_level[level].get(word, 0) + 1
+    sentences = sorted(
+        ((len(text.split()), text) for text in measured_sentences(payload)),
+        key=lambda item: -item[0],
+    )
+    longest = sentences[0][1] if sentences else ""
     share = {level: (100.0 * count / total if total else 0.0) for level, count in counts.items()}
     above_a1 = {}
     for level in CEFR_LEVELS[1:]:
@@ -369,6 +452,10 @@ def profile_vocabulary(payload, cefr_levels=None):
     }
     return {
         "total_words": total,
+        "fork_words": fork_words,
+        # The A1 share of the parts alone: the easy fork lines must not
+        # pull a hard text over the gate.
+        "parts_a1_share": 100.0 * part_a1 / part_words if part_words else 0.0,
         "levels": counts,
         "words_by_level": words_by_level,
         "share": share,
@@ -376,23 +463,29 @@ def profile_vocabulary(payload, cefr_levels=None):
         "above_a1": above_a1,
         "above_a2": above_a2,
         "longest_sentence": longest,
+        "sentences": sentences,
     }
 
 
 def vocabulary_errors(payload, cefr_levels=None):
     """The three submission gates: control, not a promise of level A1.
 
-    Refuses the submission when fewer than MIN_A1_SHARE % of the words are
-    A1, when a word above A2 is missing from the text glossary, or when a
+    Checked are the sentences of the parts and the fork lines (question
+    and answers). Refuses the submission when fewer than MIN_A1_SHARE % of
+    the words are A1 (in the parts alone or in the whole text), when a word above A2 is missing from the text glossary, or when a
     sentence is longer than LONG_SENTENCE_WORDS words. Returns Russian
     error messages; an empty list means the text passes.
     """
     profile = profile_vocabulary(payload, cefr_levels=cefr_levels)
     errors = []
     if profile["total_words"]:
-        a1_share = profile["share"]["A1"]
-        if a1_share < MIN_A1_SHARE:
-            errors.append(f"Словарь: только {a1_share:.0f} % слов уровня A1, нужно не меньше {MIN_A1_SHARE:.0f} %")
+        # Two shares, both must hold: the parts alone (as before the fork
+        # lines were counted) and the whole text with the forks.
+        parts_share, a1_share = profile["parts_a1_share"], profile["share"]["A1"]
+        if profile["total_words"] > profile["fork_words"] and parts_share < MIN_A1_SHARE:
+            errors.append(f"Словарь: только {parts_share:.0f} % слов уровня A1 в частях, нужно не меньше {MIN_A1_SHARE:.0f} %")
+        elif a1_share < MIN_A1_SHARE:
+            errors.append(f"Словарь: только {a1_share:.0f} % слов уровня A1 вместе с развилками, нужно не меньше {MIN_A1_SHARE:.0f} %")
     uncovered = sorted(
         word for word, info in profile["above_a2"].items()
         if not info["in_glossary"]
@@ -561,8 +654,10 @@ def submit_text(data, *, actor="cli"):
     if isinstance(payload, dict):
         try:
             errors += vocabulary_errors(payload)
-        except EditorialError:
-            pass  # a missing word list must not block structural checks
+        except EditorialError as exc:
+            # No word list means no vocabulary check: say so and refuse,
+            # instead of letting the text through unchecked.
+            errors.append(f"Словарь: проверка невозможна — {exc}")
     if "cover" in data and data["cover"] not in Publication.CoverTone.values:
         errors.append(f"Текст: cover — один из тонов {', '.join(Publication.CoverTone.values)}")
     card_refs = data.get("knowledge_cards") or []

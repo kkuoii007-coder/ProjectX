@@ -149,11 +149,52 @@ sudo systemctl restart philosophy-reader-web philosophy-reader-worker
 venv/bin/python manage.py submit_text content/texts/what-does-it-mean-to-be-brave.json
 venv/bin/python manage.py review_text content/texts/what-does-it-mean-to-be-brave.json   # один платный вызов
 venv/bin/python manage.py publish_text content/texts/what-does-it-mean-to-be-brave.json --admin <логин>
-venv/bin/python manage.py withdraw_publication socrates-questions --admin <логин>
 ```
+
+Снятие текста с сайта — отдельное действие владельца, а не шаг обновления:
+`withdraw_publication <slug> --admin <логин>`. Снятый текст исчезает из
+библиотеки, поиска и блока `Next question`; страница мыслителя или подборки,
+где не осталось опубликованных текстов, отвечает 404. Демо-текст о Сократе
+(`seed_demo`) — тестовые данные, на сервере команда не запускается.
 
 Для проверки моделью Sonnet 5.5 в `service.env` должно быть
 `AI_REVIEW_MODEL=anthropic/claude-sonnet-5.5`.
+
+### Словарная проверка при подаче (CEFR-J)
+
+`submit_text` отклоняет текст, если не выполнено хотя бы одно из трёх условий.
+Это контроль, а не обещание уровня A1; список слов —
+`content/wordlists/cefrj-vocabulary-profile-1.5.csv` (CEFR-J Vocabulary
+Profile 1.5, источник и условия использования — `content/wordlists/README.md`).
+
+1. Слов уровня A1 не меньше 90 % — и в частях отдельно, и во всём тексте вместе
+   с развилками (лёгкие строки развилок не «вытягивают» трудный текст).
+2. Каждое слово выше A2 или отсутствующее в списке объяснено в словарике текста
+   (`glossary`); слова составного термина считаются объяснёнными.
+3. Ни одно предложение не длиннее 16 слов.
+
+Что проверяется: предложения частей и строки развилок — вопрос и три строки
+ответов. Подписи кнопок `Yes`, `No`, `Not sure` — интерфейс, не текст. Запись в
+`sentences` — одно предложение и измеряется целиком; строка развилки может
+состоять из нескольких коротких предложений и измеряется по предложениям.
+Заголовки частей и развилок проверка не считает.
+
+Заглавная буква: слово с заглавной внутри предложения — имя или название
+(`Politics`), оно считается уровнем A1 и подачу не блокирует. В начале
+предложения, после двоеточия и после открывающей кавычки заглавная буква —
+только орфография: слово ищется в списке, и именем считается лишь слово, которого
+в списке нет.
+
+Профиль до подачи, без обращения к базе:
+
+```bash
+venv/bin/python manage.py vocabulary_profile content/texts/<slug>.json
+```
+
+Команда печатает доли слов по уровням, долю A1 в частях, слова выше A1 с
+пометкой словарика, самые длинные предложения и итог; код возврата 1, если
+словарная проверка отклонила бы подачу (структуру и карточки команда не смотрит).
+Без файла списка слов подача отклоняется: непроверенный текст не проходит.
 
 ## Обложка, библиотека и читалка (16 ноября 2026)
 
@@ -167,6 +208,18 @@ venv/bin/python manage.py withdraw_publication socrates-questions --admin <ло�
   смена тона не меняет ревизию и не требует новой проверки.
 - Читалка показывает развилку после части, блок `About this text` и ссылку
   `Write to us` на адрес из `CONTACT_EMAIL`.
+- Правило развилки (20 ноября 2026): текст с развилками открывается по шагам.
+  Сначала видны только первая часть и первый вопрос; каждый ответ показывает свою
+  строку, следующую часть и следующий вопрос. `About this text` и `Next question`
+  появляются вместе с последней частью, `Words` и действия вошедшего читателя
+  видны всегда. Открытое не закрывается, ответ можно сменить. Ответы и место
+  чтения хранятся только на устройстве, отдельно для каждого текста и каждой его
+  ревизии: другой текст и новая ревизия открываются закрытыми. Ссылка `#part-N`
+  открывает текст до части N и не выбирает ответов за читателя. Без JavaScript,
+  при сбое скрипта и при печати виден весь текст со строками всех ответов.
+  Ничего не отправляется на сервер и не оценивается. Сценарий приёмки в
+  браузере — `tools/qa/fork_steps.js` (задача `browser` в CI), снимки шагов —
+  `docs/screenshots/pr1-fork/`.
 - Форма мастерской перенесена с главной на `/projects/new/`.
 - Путь чтения (главная, библиотека, читалка) — на английском с русскими
   подписями; переключатель `RU` в шапке их скрывает, выбор хранится в браузере.
@@ -177,6 +230,11 @@ venv/bin/python manage.py withdraw_publication socrates-questions --admin <ло�
 
 - Ubuntu 24.04, Python 3.12, PostgreSQL 16 с расширением `vector`.
 - Отдельная БД и роль: `philosophy_reader`.
+- Расширение `vector` включает сама первая миграция `sources`
+  (`CREATE EXTENSION IF NOT EXISTS vector`), поэтому `migrate` и тесты проходят
+  на чистой базе. Роли нужно право создать расширение (суперпользователь или
+  заранее выполненный `CREATE EXTENSION vector` в базе и в `template1` для
+  тестовой базы). На сервере, где миграции уже применены, ничего не меняется.
 
 ## Установка (выполнено на этом сервере)
 
@@ -306,6 +364,16 @@ venv/bin/python manage.py test --settings=config.settings.test
 venv/bin/python manage.py check
 ```
 
+Те же проверки запускает GitHub Actions (`.github/workflows/tests.yml`) на
+каждый pull request и на каждый push в `main`: чистый PostgreSQL 16 с pgvector,
+Python 3.12, `check`, `makemigrations --check`, `migrate`, полный набор тестов.
+Платных вызовов нет: тесты работают с поддельным провайдером.
+Вторая задача того же файла, `browser`, проходит читалку в Chromium сценарием
+`tools/qa/fork_steps.js` на чистой базе, которую готовит
+`tools/qa/seed_browser_check.py` (публикует оба текста с заглушкой проверяющего;
+работает только при `PR_BROWSER_CHECK=1`, поддельном провайдере и `DEBUG`, на
+сервере не запускать).
+
 ## Management commands
 
 | Команда | Назначение |
@@ -317,10 +385,12 @@ venv/bin/python manage.py check
 | `review_text` | Живая проверка поданного текста: один платный вызов, замечания по-русски; `--inline` — без воркера |
 | `publish_text` | Публикация через `publish_revision`: `<файл> --admin <логин>` |
 | `withdraw_publication` | Снять с публикации: `<slug> --admin <логин> [--reason]` |
+| `vocabulary_profile` | Словарный профиль файла текста по списку CEFR-J, без базы: `<файл> [--list <csv>]`; код 1, если словарная проверка отклонила бы подачу |
 | `run_ai_worker --once` | Обработать одну задачу из очереди |
 | `run_maintenance` | Зависшие задачи и резервы |
 | `issue_credits` | Ручное пополнение: `--login --amount --operation-key --reason` (идемпотентно, только при `TOPUP_MODE=manual_test`) |
 | `import_source` | Импорт TXT/MD/PDF: `--path --login [--title]`, дедуп по hash |
+| `import_editorial_source` | Импорт файла на общую редакционную полку (без владельца, виден всем в поиске): `--path --title --author --work-title [--kind --language --canonical-url --edition --translator --rights --edition-url --retrieved-at]`; дедуп по hash, индексация — отдельно `index_source` |
 | `index_source` | Chunking + embeddings: `--document <uuid> [--reindex]` |
 | `search_sources` | Гибридный FTS+vector поиск: `--login --query [--document --top]` |
 | `export_user_data` | JSON-выгрузка данных пользователя: `--login [--output]` |

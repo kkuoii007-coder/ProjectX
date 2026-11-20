@@ -5,7 +5,7 @@
 {% block cover_tone %}{{ tone|default:'clay' }}{% endblock %}
 {% block title %}Philosophy Reader — big questions in simple English{% endblock %}
 {% block description %}Big questions in simple English. For adult beginners. Tap a sentence for Russian.{% endblock %}
-{% block head_script %}<script>(function(r,d){r.className+=' js';try{if(localStorage.getItem('pr-ui-ru')==='off'){r.className+=' ui-ru-off'}}catch(e){}function back(){if(!r.hasAttribute('data-js-ready')){r.classList.remove('js','ui-ru-off')}}d.addEventListener('DOMContentLoaded',back);setTimeout(back,3000)})(document.documentElement,document)</script>{% endblock %}
+{% block head_script %}<script>(function(r,d){r.className+=' js';try{if(localStorage.getItem('pr-ui-ru')==='off'){r.className+=' ui-ru-off'}}catch(e){}function back(){if(!r.hasAttribute('data-js-ready')){r.classList.remove('js','ui-ru-off');r.setAttribute('data-js-off','')}}d.addEventListener('DOMContentLoaded',back);setTimeout(back,3000)})(document.documentElement,document)</script>{% endblock %}
 {% block skip_link %}<a class="skip-link" href="#main">Skip to the text</a>{% endblock %}
 {% block site_header %}
 <header class="site-header" id="site-header">

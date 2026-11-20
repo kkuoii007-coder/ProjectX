@@ -15,6 +15,7 @@ from apps.library.models import Favorite, Publication
 from apps.library.templatetags.ui import ru_plural
 from apps.workshop.models import Project, Revision
 from tests.helpers import publish_demo_fixture
+from tests.test_reading_path import READ_URL, SLUG, ReadingBase
 
 
 class Element:
@@ -536,3 +537,68 @@ class RedesignContractsTests(TestCase):
                 self.assertNotIn("style=", source)
                 if page.parent.name == "accounts":
                     self.assertIn("includes/account_nav.html", source)
+
+
+class ForkedTextWithoutScriptTests(ReadingBase):
+    """A text with forks as the server sends it: the whole text, nothing closed.
+
+    The script closes what the reader has not reached; without it (and in
+    print) every part, every fork with all its lines and the end are there.
+    """
+
+    def setUp(self):
+        self.markup = Markup(self.client.get(READ_URL))
+        self.article = self.markup.find("article", css_class="reader")[0]
+
+    def closed(self, element):
+        marks = set(element.attrs) & {"hidden", "inert", "aria-hidden", "style"}
+        marks |= {name for name in element.attrs.get("class", "").split() if name.startswith("is-")}
+        return marks
+
+    def test_article_names_the_text_and_the_revision(self):
+        self.assertEqual(self.article.attrs.get("data-fork-scope"), f"{SLUG}:{self.revision.content_hash[:16]}")
+        self.assertEqual(len([element for element in self.markup.elements if "data-fork-scope" in element.attrs]), 1)
+
+    def test_every_part_fork_and_end_block_is_open(self):
+        sections = self.markup.find("section", within=self.article)
+        parts = [section for section in sections if "part" in section.attrs.get("class", "").split()]
+        forks = [section for section in sections if "data-fork" in section.attrs]
+        ends = [section for section in sections if "end-block" in section.attrs.get("class", "").split()]
+        self.assertEqual([part.attrs.get("id") for part in parts], ["part-1", "part-2", "part-3", "part-4"])
+        self.assertEqual([part.attrs.get("data-part") for part in parts], ["1", "2", "3", "4"])
+        self.assertEqual(len(forks), 3)
+        self.assertEqual([" ".join(end.attrs["class"].split()[1:]) for end in ends], ["terms", "about", "next"])
+        self.assertEqual(["data-reader-end" in end.attrs for end in ends], [False, True, True])  # Words are always shown
+        for section in parts + forks + ends:
+            with self.subTest(section=section.attrs.get("id") or section.attrs.get("class")):
+                self.assertEqual(self.closed(section), set())
+                for parent in section.ancestors:
+                    self.assertEqual(self.closed(parent), set())
+        # The chain in the order of the page: part, fork, part, fork, part, fork, part.
+        chain = [section for section in sections if section in parts or section in forks]
+        self.assertEqual(["fork" if section in forks else "part" for section in chain], ["part", "fork"] * 3 + ["part"])
+        for fork in forks:
+            lines = self.markup.find("div", css_class="choice__option", within=fork)
+            self.assertEqual(len(lines), 3)
+            for line in lines:
+                self.assertEqual(self.closed(line), set())
+                self.assertTrue(line.text.strip())
+            buttons = [button for button in self.markup.find("button", within=fork) if "data-fork-choice" in button.attrs]
+            self.assertEqual([button.attrs.get("data-fork-key") for button in buttons], ["yes", "no", "not_sure"])
+            self.assertEqual({button.attrs.get("type") for button in buttons}, {"button"})
+            self.assertEqual({button.attrs.get("aria-pressed") for button in buttons}, {"false"})
+            self.assertEqual({button.attrs.get("data-fork-choice") for button in buttons}, {line.attrs["id"] for line in lines})
+
+    def test_only_the_scripts_own_controls_wait_for_it(self):
+        waiting = [element for element in self.markup.elements if self.article in element.ancestors and "hidden" in element.attrs]
+        self.assertEqual(len(waiting), 6)
+        for element in waiting:
+            self.assertTrue("data-fork-buttons" in element.attrs or "data-fork-hint" in element.attrs, element.attrs)
+
+    def test_text_without_forks_is_never_closed(self):
+        plain = publish_demo_fixture()
+        markup = Markup(self.client.get(reverse("library:read", args=[plain.slug])))
+        article = markup.find("article", css_class="reader")[0]
+        self.assertNotIn("data-fork-scope", article.attrs)
+        self.assertFalse([element for element in markup.elements if "data-fork" in element.attrs])
+        self.assertTrue(markup.find("section", css_class="part", within=article))
