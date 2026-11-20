@@ -8,7 +8,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.operations.models import Report
 
 from .models import Collection, Favorite, Publication, Thinker
-from .presenters import about_text, cover_lines, outline, publication_item, reader_parts, reader_terms, titles, tone
+from .presenters import about_text, cover_lines, fork_scope, outline, publication_item, reader_parts, reader_terms, titles, tone
 
 REPORT_CATEGORIES = {
     "factual_error": "Фактическая ошибка",
@@ -86,11 +86,13 @@ def read(request, slug):
     shown = titles(payload)
     if not shown["title_en"]:
         shown["title_en"] = publication.slug
+    parts = reader_parts(payload)
     context = {
         "publication": publication,
         **shown,
         "tone": tone(publication),
-        "parts": reader_parts(payload),
+        "parts": parts,
+        "fork_scope": fork_scope(publication, parts),
         "outline": outline(payload),
         "terms": reader_terms(payload),
         "about": about_text(payload),
