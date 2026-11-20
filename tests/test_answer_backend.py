@@ -80,15 +80,15 @@ class ModelWordsAreNotShownTests(LiveBase):
         self.assertNotIn("example.test", self.project_page(project))
 
 
-FAIL_REVIEW = {
+REPAIR_REVIEW = {
     **PASS_REVIEW,
-    "verdict": "fail",
+    "verdict": "repair",
     "factual_state": "unsupported",
     "issues": [{"code": "unsupported", "severity": "blocking", "part_key": "1", "reason_ru": "Часть не подтверждается отрывком."}],
 }
 
 
-@override_settings(**LIVE, AI_MAX_OUTPUT_TOKENS=4321)
+@override_settings(**LIVE, AI_MAX_OUTPUT_TOKENS=4321, AI_MAX_PROVIDER_CALLS_PER_JOB=6)
 class OutputCapTests(LiveBase):
     """The budget check counts on AI_MAX_OUTPUT_TOKENS output tokens, so
     every call of an answer with sources asks the provider for that cap."""
@@ -101,7 +101,7 @@ class OutputCapTests(LiveBase):
                 return grounded(parts)
             if number in (2, 4):  # the corrected answer; the repaired answer
                 return grounded(parts)
-            return FAIL_REVIEW if number == 3 else PASS_REVIEW
+            return REPAIR_REVIEW if number == 3 else PASS_REVIEW
 
         project, job, calls = self.run_live(POLITICAL_ANIMAL, answers)
         self.assertEqual(job.outcome, AIJob.Outcome.DELIVERED, job.result_reference)
@@ -112,8 +112,7 @@ class OutputCapTests(LiveBase):
             ("review_answer_from_sources", False),
             ("repair", False),
             ("review_answer_from_sources", False),
-        ][: len(calls)])
-        self.assertGreaterEqual(len(calls), 4)  # generation, correction, review, repair
+        ])
         self.assertEqual(self.call_options, [{"max_tokens": 4321}] * len(calls))
 
     def test_the_cap_goes_into_the_request_body(self):
