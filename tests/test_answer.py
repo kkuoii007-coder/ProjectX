@@ -666,18 +666,20 @@ class VerbatimTests(SimpleTestCase):
         self.assertEqual(quoted_phrases("Aristotle's book says that it's man's nature, and the poets' words agree."), [])
         self.assertEqual(quoted_phrases("Aristotle’s book says that it’s man’s nature, and the poets’ words agree."), [])
         self.assertEqual(quoted_phrases("He says: ‘it’s a lover of war’."), [("it’s a lover of war",)])
-        # A closing mark looks like the apostrophe of a plural possessive:
-        # both readings are kept, and one of them must stand in the book.
+        # A closing mark looks like the apostrophe of a plural possessive.
         for marks in ("‘’", "''"):
             with self.subTest(marks=marks):
                 left, right = marks
+                # A mark that cannot be a possessive ends the phrase: the whole of it is the quotation.
                 self.assertEqual(
                     quoted_phrases(f"He says: {left}the sons and sons{right} sons live together{right}."),
-                    [("the sons and sons", f"the sons and sons{right} sons live together")],
+                    [(f"the sons and sons{right} sons live together",)],
                 )
+                self.assertEqual(quoted_phrases(f"He says {left}a lover of war{right} about the poets{right} man."), [("a lover of war",)])
+                # Only possible possessives after the opening mark: each is a reading.
                 self.assertEqual(
-                    quoted_phrases(f"He says {left}a lover of war{right} about the poets{right} man."),
-                    [("a lover of war", f"a lover of war{right} about the poets")],
+                    quoted_phrases(f"He says {left}the rule of the sons{right} and the poets{right} man agrees."),
+                    [("the rule of the sons", f"the rule of the sons{right} and the poets")],
                 )
 
 
@@ -754,7 +756,7 @@ class CheckAnswerTests(SimpleTestCase):
         self.assertTrue(ok.ok, ok.violations)
         bad = check_answer(answer([[GOOD]] * 3, extra_sentence="Aristotle says: “man is a social animal”."), self.supports)
         self.assertFalse(bad.ok)
-        self.assertIn("part 1: the words in quotation marks are not in the sources word for word: “man is a social animal”", bad.violations)
+        self.assertIn("part 1, sentence 2: the words in quotation marks are not in the sources word for word: “man is a social animal”", bad.violations)
         # The rule covers titles too.
         series = answer([[GOOD]] * 3)
         series["title_en"] = "“Man is a social animal”"
