@@ -63,7 +63,7 @@
           <details class="source">
             <summary><span lang="en">Source: {{ source.label }}</span><span class="ru-ui" lang="ru">Источник</span></summary>
             <blockquote class="source__excerpt" lang="en">{{ source.excerpt }}</blockquote>
-            {% if source.attribution %}<p class="source__attribution" lang="en">{{ source.attribution }} {% include 'includes/edition_links.html' with links=source.links %}</p>{% endif %}
+            {% if source.attribution %}<p class="source__attribution" lang="en">{{ source.attribution }}{% include 'includes/edition_links.html' with links=source.links %}</p>{% endif %}
           </details>
           {% endfor %}
         </div>
@@ -77,11 +77,11 @@
       <p class="refusal__line" lang="en">No credits were taken.<span class="ru-ui" lang="ru">Кредиты не списаны.</span></p>
       {% if shelf_books %}
       <p class="refusal__line" lang="en">You can ask about a book on our shelf:<span class="ru-ui" lang="ru">Можно спросить о книге с нашей полки:</span></p>
-      <ul class="shelf-list">
+      <div class="shelf-list">
         {% for book in shelf_books %}
-        <li class="meta" lang="en" data-shelf-book>{{ book.attribution }} {% include 'includes/edition_links.html' with links=book.links %}<span class="ru-ui" lang="ru">{% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></li>
+        <p class="meta" lang="en" data-shelf-book>{{ book.attribution }}{% include 'includes/edition_links.html' with links=book.links %}<span class="ru-ui" lang="ru">{% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></p>
         {% endfor %}
-      </ul>
+      </div>
       {% endif %}
       <p class="refusal__next"><a class="btn" href="{% url 'workshop:create_project' %}" lang="en">Ask another question</a><span class="ru-ui" lang="ru">Задать другой вопрос</span></p>
     </section>

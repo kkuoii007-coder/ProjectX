@@ -23,6 +23,7 @@ from django.db import transaction
 from apps.sources.locators import format_place, span_place
 from apps.sources.models import SourceDocument
 from apps.sources.retrieval import search_shelf
+from apps.sources.shelf import edition_links
 
 from .models import RetrievalItem
 
@@ -431,6 +432,9 @@ def edition_record(document) -> dict:
         "license": edition.license,
         "license_url": edition.license_url,
         "url": edition.url or "",
+        # What the licence of the source asks to show next to the
+        # attribution: digital publisher, source file, licence.
+        "links": [list(pair) for pair in edition_links(edition)],
         "source_sha256": edition.source_sha256,
         "document_id": str(document.pk),
         "document_version": document.version,
@@ -480,7 +484,7 @@ def build_payload(series: dict, checked: CheckedAnswer) -> dict:
         "based_on": [edition["book"] for edition in editions],
         # What the page shows about each book; the full record is in RevisionSource.
         "source_editions": [
-            {key: edition[key] for key in ("book", "book_ru", "attribution", "url", "license", "license_url")} for edition in editions
+            {key: edition[key] for key in ("book", "book_ru", "attribution", "links")} for edition in editions
         ],
     }
 

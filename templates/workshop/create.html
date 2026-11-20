@@ -22,11 +22,12 @@
         <form method="post" class="workshop-form">{% csrf_token %}
             <input type="hidden" name="mode" value="explain_topic">
             <p class="shelf-ask" lang="en">Ask about a book on our shelf.<span class="ru-ui" lang="ru">Спросите о книге с нашей полки.</span></p>
-            <ul class="shelf-list">
+            {# The links (digital publisher, source file, licence) are what the licence of the source asks to show. #}
+            <div class="shelf-list">
               {% for book in shelf_books %}
-              <li class="meta" lang="en" data-shelf-book>On the shelf: {{ book.attribution }} {% include 'includes/edition_links.html' with links=book.links %}<span class="ru-ui" lang="ru">На полке: {% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></li>
+              <p class="meta" lang="en" data-shelf-book>On the shelf: {{ book.attribution }}{% include 'includes/edition_links.html' with links=book.links %}<span class="ru-ui" lang="ru">На полке: {% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></p>
               {% endfor %}
-            </ul>
+            </div>
             <label for="topic">Ваш вопрос о книге</label>
             <textarea id="topic" name="topic" maxlength="{{ max_question_chars }}" required rows="4" placeholder="{{ placeholder_examples.0 }}" aria-describedby="topic-help">{{ topic }}</textarea>
             {# Examples of a question are presentation, not data: the first one is also the static placeholder; with JS the line and the placeholder change together. #}

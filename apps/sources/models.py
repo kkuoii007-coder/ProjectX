@@ -47,6 +47,7 @@ class SourceEdition(models.Model):
     first_published_year = models.PositiveSmallIntegerField(null=True, blank=True)
     printing_year = models.PositiveSmallIntegerField(null=True, blank=True)
     digital_publisher = models.CharField(max_length=200, blank=True)
+    digital_publisher_url = models.URLField(blank=True)
     license = models.CharField(max_length=100, blank=True)
     license_url = models.URLField(blank=True)
     source_sha256 = models.CharField(max_length=64, blank=True)

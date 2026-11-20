@@ -44,6 +44,10 @@ Line shown to a reader wherever the book is named or quoted:
 > published 1932). Digital text: Perseus Digital Library, from the 1944
 > printing. CC BY-SA 4.0.
 
+Next to this line the page gives three links, taken from `edition.json`:
+Perseus Digital Library (<https://www.perseus.tufts.edu/>), the source file in
+its GitHub repository (the exact address above) and the licence.
+
 ## What this project changes
 
 The XML file is not edited. The text that the reader's questions are answered
@@ -60,11 +64,34 @@ text:
   by removed notes are closed up;
 - a `<milestone>` standing between two words with no space (154 places, for
   example `that<milestone/>wealth`) is read as the space between them;
-- misprints of the digital text (`educationand`, `necessarys o that`,
-  `for Ihand it on`, `master,the`, `tochastity`) are kept as they are.
+- misprints of the digital text are kept as they are:
+  - words run together or split in the text itself: `educationand`,
+    `necessarys o that`, `for Ihand it on`, `master,the`, `tochastity`;
+  - a title set in `<title>` with no space before the tag, so that the two
+    words meet once the markup is removed: `theEthics` (twice: 4.1295a,
+    7.1332a; in the file `the<title>Ethics</title>`), `theLaws` (7.1336a),
+    `entitledLaw and Order` (5.1306b);
+  - `assemblies(for` (4.1298b): in the file a line milestone stands between
+    the word and the bracket, `assemblies<milestone/>(for`, with no space;
+    the rule above reads a milestone as a space only between two words;
+  - `happy(, but best of all` (5.1314b): an opening bracket that the file
+    never closes.
 
 No correction of the Perseus text is made here, so there is nothing to offer
 back; the misprints above can be reported to the repository.
+
+## Chunks
+
+The derived text is cut into 202 chunks of 300–600 words on sentence
+boundaries, never across a book. Two chunks are shorter than 300 words,
+because a sentence is never cut:
+
+- chunk 195 (`Politics 8.1339b–1340a`, 186 words): the sentence that follows
+  it is 438 words long (it opens chunk 196), and together they would exceed
+  600 words;
+- chunk 201 (`Politics 8.1342b`, 285 words): the end of Book 8. Joined to the
+  chunk before it, it would give 614 words; the sentence boundary nearest to
+  the middle leaves 329 and 285 words.
 
 ## Bekker pages
 

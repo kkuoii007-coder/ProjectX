@@ -1,2 +1,1 @@
-{# Links next to an attribution line: the digital text and its licence. `links` is a list of href, en, ru. #}
-{% if links %}<span class="edition-links">{% for link in links %}<a href="{{ link.href }}" rel="noopener" lang="en">{{ link.en }}<span class="ru-ui" lang="ru">{{ link.ru }}</span></a>{% endfor %}</span>{% endif %}
+{% if links %} <span class="edition-links" data-shelf-links>{% for label, url in links %}<a href="{{ url }}" rel="noopener noreferrer">{{ label }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</span>{% endif %}{# Links after an attribution line: digital publisher, source file, licence. `links` is a sequence of (label, url) pairs with web addresses only (apps.sources.shelf). #}

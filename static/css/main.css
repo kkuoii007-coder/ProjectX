@@ -1836,18 +1836,17 @@ td form.inline {
 .shelf-list {
   max-width: 42rem;
   margin: 0 0 var(--s-5);
-  padding: 0;
-  list-style: none;
 }
 
-.shelf-list li {
+.shelf-list p {
+  margin: 0;
   padding: var(--s-3) 0 var(--s-3) var(--s-4);
   border-left: 2px solid var(--line-strong);
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 
-.shelf-list li + li {
+.shelf-list p + p {
   margin-top: var(--s-3);
 }
 
@@ -1921,20 +1920,15 @@ td form.inline {
   overflow-wrap: anywhere;
 }
 
-/* Links after an attribution line: the digital text and its licence. */
+/* Links after an attribution line: digital publisher, source file, licence. */
 .edition-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--s-5);
+  display: block;
   margin-top: var(--s-1);
 }
 
 .edition-links a {
-  padding-block: 0.4rem; /* two lines of text: a 44px target on a phone */
-}
-
-.edition-links .ru-ui {
-  color: var(--ink-3);
+  display: inline-block;
+  padding-block: 0.6rem; /* a 44px target on a phone */
 }
 
 /* A final screen without a text: no source, search is down, or the answer

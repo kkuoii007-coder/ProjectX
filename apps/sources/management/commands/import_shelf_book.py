@@ -70,6 +70,11 @@ class Command(BaseCommand):
                 say(f"Страниц без метки (начало по разделу): {', '.join(stats['pages_without_milestone'])}")
         if report.edition_changed:
             say("Метаданные издания обновлены: " + ", ".join(report.edition_changed))
+        if report.edition_deferred:
+            say(
+                "Отложено до готовности этого документа (пока в поиске прежний): "
+                + ", ".join(report.edition_deferred)
+            )
         if report.supersedes_set:
             say(f"Документ {report.supersedes_set} помечен заменённым (уйдёт из поиска, когда новый станет ready)")
         for note in report.notes:

@@ -7,6 +7,7 @@ editorial corpus is shared. Retrieval never crosses scope.
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from django.conf import settings
 from django.db import transaction
@@ -92,8 +93,40 @@ def index_document(document) -> dict:
 
     with transaction.atomic():
         document.processing_state = SourceDocument.Processing.READY
-        document.save(update_fields=["processing_state"])
+        update_fields = ["processing_state"]
+        if _apply_edition_pending(document):
+            update_fields.append("metadata_json")
+        document.save(update_fields=update_fields)
     return {"indexed": indexed, "state": "ready", "chunks": len(chunks), "kept_chunks": structured}
+
+
+# Fields of an edition that describe the source file of the document on the
+# shelf: where the file is, when it was taken, its hash and the query lexicon
+# tuned to its text.
+EDITION_SOURCE_FIELDS = ("url", "retrieved_at", "source_sha256", "query_lexicon")
+EDITION_PENDING = "edition_pending"
+
+
+def _apply_edition_pending(document) -> bool:
+    """A new version of a book was imported while the previous one was on the
+    shelf: the edition kept describing the previous file. Now that this
+    document is READY and takes its place, the edition describes this one."""
+    pending = (document.metadata_json or {}).get(EDITION_PENDING)
+    if not pending or not document.edition_id:
+        return False
+    edition = document.edition
+    newer_on_shelf = edition.documents.filter(
+        processing_state=SourceDocument.Processing.READY, version__gt=document.version
+    ).exists()
+    values = {name: pending[name] for name in EDITION_SOURCE_FIELDS if name in pending}
+    if values and not newer_on_shelf:
+        if values.get("retrieved_at"):
+            values["retrieved_at"] = datetime.fromisoformat(values["retrieved_at"])
+        for name, value in values.items():
+            setattr(edition, name, value)
+        edition.save(update_fields=list(values))
+    document.metadata_json = {key: value for key, value in document.metadata_json.items() if key != EDITION_PENDING}
+    return True
 
 
 def _embed_batched(texts):
@@ -156,7 +189,8 @@ class SearchOutcome:
 
 def _search(documents, query: str, top_n=None) -> SearchOutcome:
     """Deterministic hybrid of the text half (lexical.py) and pgvector."""
-    top_n = top_n or settings.RETRIEVAL_MAX_CHUNKS
+    if not top_n or top_n < 0:
+        top_n = settings.RETRIEVAL_MAX_CHUNKS
     outcome = SearchOutcome()
     document_ids = list(documents.values_list("id", flat=True))
     if not document_ids or not query.strip():
@@ -195,7 +229,8 @@ def _search(documents, query: str, top_n=None) -> SearchOutcome:
 
     max_fts = max((entry.get("fts", 0.0) for entry in scores.values()), default=0.0)
     max_vec = max((entry.get("vec", 0.0) for entry in scores.values()), default=0.0)
-    chunks = SourceChunk.objects.in_bulk(scores.keys())
+    # The caller shows the book of each hit: one query, not three per hit.
+    chunks = SourceChunk.objects.select_related("document__edition__work").in_bulk(scores.keys())
     # Deterministic merge: normalize each leg to [0,1] by its max, average.
     for chunk_id, entry in scores.items():
         fts_raw = entry.get("fts", 0.0)
@@ -286,7 +321,8 @@ def search_shelf(query: str, top_n=None) -> ShelfSearchResult:
         `fts_raw`       BM25 of the text half (0 if the chunk came from the
                         vector half only);
         `fts_coverage`  0..1, idf-weighted share of the question's concepts
-                        present in the chunk;
+                        present in the chunk; words the shelf does not know
+                        count as concepts that are not there;
         `vector_raw`    cosine similarity, or None if the chunk was not a
                         vector hit or the vector half did not run;
         `combined`      the merged score used for the order;
@@ -295,9 +331,13 @@ def search_shelf(query: str, top_n=None) -> ShelfSearchResult:
       alone: "search is degraded", which is not the same as "the source has
       nothing";
     - `elapsed_ms`: time of the whole search;
-    - `fts_terms`, `missing_terms`, `unmapped_terms`: query words of the
-      text half, significant words absent from the shelf, Russian words it
-      could not translate.
+    - `fts_terms`: the words the text half searched for;
+    - `missing_terms`: significant words of the question found nowhere on
+      the shelf;
+    - `unmapped_terms`: Russian words that no book's lexicon translates.
+      Both kinds lower `fts_coverage` of every hit: the question asks about
+      something the shelf does not have ("Что такое свобода у Сартра?").
+    `top_n` of None, 0 or less means the default (RETRIEVAL_MAX_CHUNKS).
     The exact page of a verbatim quotation: locators.locate_quote().
     """
     return search_scope(owner=None, query=query, top_n=top_n)

@@ -47,9 +47,14 @@ POLITICAL_ANIMAL = "Почему Аристотель называет чело�
 KANT = "Что такое категорический императив у Канта?"
 HEIDEGGER = "Что такое заброшенность у Хайдеггера?"
 RELATED_TEXT = "why-do-people-live-in-cities"  # named in the fixture manifest (`related_texts`)
-# The address of the digital text and of the licence, from the manifest.
-TEXT_LINK = '<a href="https://github.com/PerseusDL/canonical-greekLit/blob/8375d5b7f542fd28790d05895c380d9c2620ca9d/data/tlg0086/tlg035/tlg0086.tlg035.perseus-eng2.xml" rel="noopener" lang="en">Digital text<span class="ru-ui" lang="ru">Электронный текст</span></a>'
-LICENSE_LINK = '<a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener" lang="en">License: CC BY-SA 4.0<span class="ru-ui" lang="ru">Лицензия</span></a>'
+# What the licence of the source asks to show next to the attribution
+# (addresses from the manifest): digital publisher, source file, licence.
+EDITION_LINKS = (
+    ' <span class="edition-links" data-shelf-links>'
+    '<a href="https://www.perseus.tufts.edu/" rel="noopener noreferrer">Perseus Digital Library</a> · '
+    '<a href="https://github.com/PerseusDL/canonical-greekLit/blob/8375d5b7f542fd28790d05895c380d9c2620ca9d/data/tlg0086/tlg035/tlg0086.tlg035.perseus-eng2.xml" rel="noopener noreferrer">Source file</a> · '
+    '<a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener noreferrer">CC BY-SA 4.0</a></span>'
+)
 SOURCE_LINE = re.compile(r"Source: Aristotle, Politics, 1\.125[23][ab](–125[23][ab])?<")
 
 
@@ -162,7 +167,7 @@ class AnswerWithSourcesTests(AnswerBase):
         self.assertIn(ATTRIBUTION, content)
         # Next to the attribution in every opened source: where the text
         # comes from and its licence, as links.
-        self.assertEqual((content.count(TEXT_LINK), content.count(LICENSE_LINK)), (3, 3))
+        self.assertEqual(content.count(ATTRIBUTION + EDITION_LINKS), 3)
         self.assertIn("AI draft. Based on: Aristotle, Politics.", content)
         self.assertIn("Черновик ИИ. Опирается на: Аристотель, «Политика».", content)
         # No edit forms for an answer with sources; the versions table stays.
@@ -178,7 +183,7 @@ class AnswerWithSourcesTests(AnswerBase):
         after = self.project_page(project)
         self.assertEqual(SOURCE_LINE.findall(before), SOURCE_LINE.findall(after))
         self.assertIn(ATTRIBUTION, after)
-        self.assertEqual((after.count(TEXT_LINK), after.count(LICENSE_LINK)), (3, 3))
+        self.assertEqual(after.count(ATTRIBUTION + EDITION_LINKS), 3)
         self.assertIn("AI draft. Based on: Aristotle, Politics.", after)
 
     def test_russian_and_english_questions_are_answered(self):
@@ -288,7 +293,7 @@ class NoSourceTests(AnswerBase):
         self.assertIn("No credits were taken.", content)
         self.assertIn("Кредиты не списаны.", content)
         self.assertIn(ATTRIBUTION, content)  # the books on the shelf
-        self.assertEqual((content.count(TEXT_LINK), content.count(LICENSE_LINK)), (1, 1))
+        self.assertEqual(content.count(ATTRIBUTION + EDITION_LINKS), 1)
         self.assertIn("data-shelf-book", content)
         self.assertIn(f'href="{self.create_url}"', content)
         self.assertIn("Ask another question", content)
@@ -376,7 +381,7 @@ class QuestionFormTests(AnswerBase):
         content = page(self.client.get(self.create_url))
         self.assertIn('Ask about a book on our shelf.<span class="ru-ui" lang="ru">', content)
         self.assertIn(f"On the shelf: {ATTRIBUTION}", content)
-        self.assertEqual((content.count(TEXT_LINK), content.count(LICENSE_LINK)), (1, 1))
+        self.assertEqual(content.count(ATTRIBUTION + EDITION_LINKS), 1)
         self.assertIn('maxlength="500"', content)
         examples = [
             "Почему Аристотель называет человека политическим животным?",
@@ -954,16 +959,23 @@ class PromptDocumentTests(SimpleTestCase):
 # --- the control run ----------------------------------------------------------------------------
 
 
-class EditionLinksTests(SimpleTestCase):
-    def test_only_web_addresses_become_links(self):
-        from apps.workshop.views import _edition_links
+class SnapshotLinksTests(SimpleTestCase):
+    def test_only_web_addresses_of_a_snapshot_become_links(self):
+        from apps.workshop.views import _parts_with_sources
 
-        self.assertEqual(_edition_links("", "", ""), [])
-        self.assertEqual(_edition_links("javascript:alert(1)", "CC", "ftp://example.org/licence"), [])
-        self.assertEqual(
-            _edition_links("https://example.org/text", "", "https://example.org/licence"),
-            [
-                {"href": "https://example.org/text", "en": "Digital text", "ru": "Электронный текст"},
-                {"href": "https://example.org/licence", "en": "License", "ru": "Лицензия"},
+        payload = {
+            "parts": [{"sources": [{"book": "A book", "label": "A book, 1"}]}],
+            "source_editions": [
+                {
+                    "book": "A book",
+                    "attribution": "A book. A licence.",
+                    "links": [["Publisher", "https://example.org/"], ["Script", "javascript:alert(1)"], "broken", ["File", "ftp://example.org/file"]],
+                }
             ],
-        )
+        }
+        source = _parts_with_sources(payload)[0]["sources"][0]
+        self.assertEqual(source["attribution"], "A book. A licence.")
+        self.assertEqual(source["links"], [("Publisher", "https://example.org/")])
+        # A revision made before the links were stored still renders.
+        del payload["source_editions"][0]["links"]
+        self.assertEqual(_parts_with_sources(payload)[0]["sources"][0]["links"], [])

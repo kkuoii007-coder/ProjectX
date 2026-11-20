@@ -26,31 +26,6 @@ TOPIC_EXAMPLES = (
 )
 
 
-def _edition_links(url, license_name, license_url) -> list:
-    """Links shown next to the attribution line of an edition: where the
-    digital text comes from and its licence. Only web addresses become
-    links; the values come from the manifest or from a stored snapshot."""
-    links = []
-    if str(url or "").startswith(("https://", "http://")):
-        links.append({"href": url, "en": "Digital text", "ru": "Электронный текст"})
-    if str(license_url or "").startswith(("https://", "http://")):
-        links.append({"href": license_url, "en": f"License: {license_name}" if license_name else "License", "ru": "Лицензия"})
-    return links
-
-
-def _shelf_for_page() -> list:
-    """The books on the shelf as the pages list them (data, not code)."""
-    return [
-        {
-            "label": book.label,
-            "label_ru": book.label_ru,
-            "attribution": book.attribution,
-            "links": _edition_links(book.edition.url, book.edition.license, book.edition.license_url),
-        }
-        for book in shelf_books()
-    ]
-
-
 def _create_page(request, status=200, **extra):
     """The workshop entry page (the form used to live on the home page)."""
     return render(
@@ -59,7 +34,7 @@ def _create_page(request, status=200, **extra):
         {
             "costs": settings.CREDIT_COSTS,
             "placeholder_examples": TOPIC_EXAMPLES,
-            "shelf_books": _shelf_for_page(),
+            "shelf_books": shelf_books(),
             "max_question_chars": settings.MAX_QUESTION_CHARS,
             **extra,
         },
@@ -98,16 +73,24 @@ def project_detail(request, project_id):
     return render(request, "workshop/project.html", _project_context(request, project))
 
 
+def _snapshot_links(edition) -> list:
+    """(label, url) pairs stored in a revision; only web addresses are shown."""
+    pairs = []
+    for item in edition.get("links") or []:
+        if isinstance(item, (list, tuple)) and len(item) == 2 and str(item[1]).startswith(("https://", "http://")):
+            pairs.append((str(item[0]), str(item[1])))
+    return pairs
+
+
 def _parts_with_sources(payload):
     """Parts of a revision for the page; every source line also gets the
-    attribution of its edition and the links to the digital text and the
-    licence. Everything comes from the stored snapshot, not from the shelf."""
+    attribution of its edition and its links (digital publisher, source
+    file, licence). Everything comes from the stored snapshot, not from
+    the shelf of today."""
     editions = {
-        edition.get("book"): {
-            "attribution": edition.get("attribution", ""),
-            "links": _edition_links(edition.get("url"), edition.get("license"), edition.get("license_url")),
-        }
+        edition.get("book"): {"attribution": edition.get("attribution", ""), "links": _snapshot_links(edition)}
         for edition in payload.get("source_editions") or []
+        if isinstance(edition, dict)
     }
     nothing = {"attribution": "", "links": []}
     return [
@@ -149,7 +132,7 @@ def _project_context(request, project):
     }
     if state not in ("text", "waiting"):
         # A final screen without a text: no versions, no discussion.
-        context["shelf_books"] = _shelf_for_page()
+        context["shelf_books"] = shelf_books()
         context["explanation"] = Message.objects.filter(project=project, owner=request.user, role="assistant", kind="explanation").order_by("-created_at").first()
     return context
 
