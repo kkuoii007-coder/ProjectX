@@ -622,13 +622,13 @@ class ShelfImportTests(TestCase):
         document.refresh_from_db()
         self.assertEqual(document.processing_state, SourceDocument.Processing.READY)
 
-    def _new_version(self, **changes):
+    def _new_version(self, word=b"creature", **changes):
         """The fixture book with one word of its file changed: a new version."""
         manifest_path = _copy_manifest(self, **changes)
         folder = os.path.dirname(manifest_path)
         xml_path = os.path.join(folder, os.path.basename(FIXTURE_XML))
         with open(xml_path, "rb") as handle:
-            data = handle.read().replace(b"political animal", b"political creature")
+            data = handle.read().replace(b"political animal", b"political " + word)
         with open(xml_path, "wb") as handle:
             handle.write(data)
         with open(manifest_path, encoding="utf-8") as handle:
@@ -709,6 +709,102 @@ class ShelfImportTests(TestCase):
         first.refresh_from_db()
         self.assertEqual((edition.source_sha256, edition.query_lexicon, edition.url), (new_sha, lexicon, new_url))
         self.assertNotIn("edition_pending", first.metadata_json)
+
+    def test_manifest_corrected_during_indexing_is_not_lost(self):
+        """The network phase of indexing takes time. A corrected manifest
+        imported meanwhile must reach the edition, not be written over by
+        what the indexer read before it started."""
+        _run("import_shelf_book", manifest=FIXTURE_MANIFEST)
+        first = SourceDocument.objects.get()
+        with mock.patch.object(retrieval, "embed_texts", _fake_vectors):
+            index_document(first)
+        draft = {"ru": [{"stems": ["животн"], "en": ["creature"]}]}
+        corrected = {"ru": [{"stems": ["животн"], "en": ["creature", "animal"]}]}
+        manifest, new_sha = self._new_version(**{"query_lexicon": draft})
+        _run("import_shelf_book", manifest=manifest)
+        second = SourceDocument.objects.get(version=2)
+        self.assertEqual(second.metadata_json["edition_pending"]["query_lexicon"], draft)
+        imports = []
+
+        def import_while_embedding(texts):
+            if not imports:
+                with open(manifest, encoding="utf-8") as handle:
+                    data = json.load(handle)
+                data["query_lexicon"] = corrected
+                with open(manifest, "w", encoding="utf-8") as handle:
+                    json.dump(data, handle, ensure_ascii=False)
+                out, _ = _run("import_shelf_book", manifest=manifest)
+                imports.append(out)
+            return _fake_vectors(texts)
+
+        # `second` was loaded before the import: its metadata is stale.
+        with mock.patch.object(retrieval, "embed_texts", import_while_embedding):
+            self.assertEqual(index_document(second)["state"], "ready")
+        self.assertEqual(len(imports), 1)
+        self.assertIn(f"уже импортировано: {second.pk}", imports[0])
+        self.assertIn("Отложено до готовности этого документа", imports[0])
+        edition = SourceEdition.objects.get()
+        self.assertEqual((edition.source_sha256, edition.query_lexicon), (new_sha, corrected))
+        stored = SourceDocument.objects.get(pk=second.pk)
+        self.assertEqual(stored.processing_state, SourceDocument.Processing.READY)
+        self.assertNotIn("edition_pending", stored.metadata_json)
+        self.assertEqual(second.metadata_json, stored.metadata_json)
+
+    def test_older_version_that_becomes_ready_later_does_not_take_the_edition(self):
+        _run("import_shelf_book", manifest=FIXTURE_MANIFEST)
+        first = SourceDocument.objects.get()
+        with mock.patch.object(retrieval, "embed_texts", _fake_vectors):
+            index_document(first)
+        second_lexicon = {"ru": [{"stems": ["животн"], "en": ["creature"]}]}
+        third_lexicon = {"ru": [{"stems": ["животн"], "en": ["beast"]}]}
+        manifest, second_sha = self._new_version(
+            **{"query_lexicon": second_lexicon, "edition.url": "https://example.org/v2.xml"}
+        )
+        _run("import_shelf_book", manifest=manifest)
+        manifest, third_sha = self._new_version(
+            word=b"beast", **{"query_lexicon": third_lexicon, "edition.url": "https://example.org/v3.xml"}
+        )
+        _run("import_shelf_book", manifest=manifest)
+        second = SourceDocument.objects.get(version=2)
+        third = SourceDocument.objects.get(version=3)
+        self.assertEqual(second.metadata_json["edition_pending"]["source_sha256"], second_sha)
+        self.assertEqual(third.metadata_json["edition_pending"]["source_sha256"], third_sha)
+        self.assertEqual(third.supersedes_id, second.pk)
+
+        with mock.patch.object(retrieval, "embed_texts", _fake_vectors):
+            self.assertEqual(index_document(third)["state"], "ready")
+            edition = SourceEdition.objects.get()
+            self.assertEqual(
+                (edition.source_sha256, edition.query_lexicon, edition.url),
+                (third_sha, third_lexicon, "https://example.org/v3.xml"),
+            )
+            # The second version is indexed after the third is on the shelf.
+            self.assertEqual(index_document(second)["state"], "ready")
+        edition.refresh_from_db()
+        self.assertEqual(
+            (edition.source_sha256, edition.query_lexicon, edition.url),
+            (third_sha, third_lexicon, "https://example.org/v3.xml"),
+        )
+        second.refresh_from_db()
+        self.assertEqual(second.processing_state, SourceDocument.Processing.READY)
+        self.assertNotIn("edition_pending", second.metadata_json)
+        self.assertEqual([book.document for book in shelf_books()], [third])
+
+    def test_lexicon_entry_that_cannot_be_searched_is_refused(self):
+        # "few", "the", "just" are stop words of the 'english' configuration.
+        dead = {"ru": [{"stems": ["граждан"], "en": ["citizen"]}, {"stems": ["немног"], "en": ["few", "the", "just"]}]}
+        with self.assertRaises(CommandError) as caught:
+            _run("import_shelf_book", manifest=_copy_manifest(self, query_lexicon=dead))
+        self.assertIn("ни одно английское слово не ищется", str(caught.exception))
+        self.assertIn("немног", str(caught.exception))
+        self.assertNotIn("граждан", str(caught.exception))
+        with self.assertRaises(CommandError):
+            _run("import_shelf_book", manifest=_copy_manifest(self, query_lexicon=dead), dry_run=True)
+        self.assertEqual(self._counts(), (0, 0, 0, 0, 0))
+        # One word that can be searched is enough for the entry.
+        alive = {"ru": [{"stems": ["немног"], "en": ["few", "fewer"]}]}
+        _run("import_shelf_book", manifest=_copy_manifest(self, query_lexicon=alive))
+        self.assertEqual(SourceEdition.objects.get().query_lexicon, alive)
 
     def test_new_version_before_the_first_is_ready_goes_straight_to_the_edition(self):
         _run("import_shelf_book", manifest=FIXTURE_MANIFEST)
@@ -1126,6 +1222,20 @@ class RussianQuestionTests(TestCase):
         self.assertEqual(search_shelf("Что такое свобода у Сартра?").fts_terms, ["freedom", "liberty", "free"])
         # The same known word alone is a question the book can be asked.
         self.assertEqual(search_shelf("Что такое свобода?").hits[0].scores["fts_coverage"], 1.0)
+
+    def test_every_english_word_of_the_lexicon_can_be_searched(self):
+        entries = self.document.edition.query_lexicon["ru"]
+        terms = sorted({term for entry in entries for term in entry["en"]})
+        lexemes = lexical._lexemes(terms)
+        self.assertEqual([term for term in terms if not lexemes[term]], [])
+        # «немногих» used to become "few", a stop word, and so a word
+        # "missing from the shelf" with the largest weight.
+        result = search_shelf("Почему олигархия — власть немногих?")
+        self.assertEqual((result.missing_terms, result.unmapped_terms), ([], []))
+        self.assertEqual(
+            result.fts_terms, ["oligarchy", "authority", "rule", "power", "minority", "fewer"]
+        )
+        self.assertGreaterEqual(result.hits[0].scores["fts_coverage"], 0.5)
 
     def test_long_query_is_cut_to_64_words(self):
         """Without the cut a query of twenty thousand words ends in
