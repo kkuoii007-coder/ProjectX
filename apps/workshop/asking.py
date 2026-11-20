@@ -5,7 +5,6 @@ The form of the workshop and the control run (`shelf_experiment`) both call
 """
 
 import unicodedata
-import unicodedata
 import uuid
 
 from django.conf import settings
@@ -44,11 +43,7 @@ class ShelfEmpty(QuestionRefused):
     status = 409
 
 
-class QuestionNotText(QuestionRefused):
-    """A NUL byte or another control character: the database cannot store
-    it, so the question is refused here with a message, not with a 500."""
-
-
+# The same refusal for an edit instruction and a question about a text (views.py).
 CONTROL_CHARACTERS_MESSAGE = "В тексте есть служебные символы, которые нельзя сохранить. Уберите их и отправьте ещё раз."
 
 
@@ -80,11 +75,9 @@ def open_question(*, owner, question: str, mode=Project.Mode.EXPLAIN):
     MAX_QUESTION_CHARS is refused, never cut.
     """
     question = normalize_question(question)
-    if has_control_characters(question):
-        raise QuestionNotText(CONTROL_CHARACTERS_MESSAGE)
     if not question:
         raise QuestionEmpty("Введите вопрос о книге")
-    if any(unicodedata.category(char) == "Cc" and char not in "\n\t" for char in question):
+    if has_control_characters(question):
         raise QuestionUnreadable("В вопросе есть служебные символы. Уберите их и отправьте вопрос ещё раз.")
     if len(question) > settings.MAX_QUESTION_CHARS:
         raise QuestionTooLong(

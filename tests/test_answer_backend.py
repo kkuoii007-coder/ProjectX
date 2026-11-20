@@ -152,7 +152,7 @@ class ControlCharactersTests(AnswerBase):
                 response = self.client.post(self.create_url, {"mode": "explain_topic", "topic": f"Почему человек{bad} — политическое животное?"})
                 self.assertEqual(response.status_code, 400)
                 content = page(response)
-                self.assertIn(CONTROL_CHARACTERS_MESSAGE, content)
+                self.assertIn("В вопросе есть служебные символы. Уберите их и отправьте вопрос ещё раз.", content)
                 # The reader keeps what he typed, without the character.
                 self.assertIn("Почему человек — политическое животное?", content)
                 self.assertNotIn(bad, content)
