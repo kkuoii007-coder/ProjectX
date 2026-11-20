@@ -1,0 +1,63 @@
+# Runs the test suite on every pull request and on every push to main.
+# The database is a clean PostgreSQL 16 with pgvector available but not
+# enabled: the migrations themselves must create the extension.
+# No paid calls: the tests use the fake provider (config/settings/test.py).
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: philosophy_reader
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: philosophy_reader
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U philosophy_reader"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      DJANGO_SECRET_KEY: ci-only-secret-key
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: philosophy_reader
+      DB_USER: philosophy_reader
+      DB_PASSWORD: ci-only-password
+      OPENROUTER_API_KEY: ""
+      LIVE_AI_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - name: Install dependencies
+        run: pip install -r requirements.lock
+      - name: Django system check
+        run: python manage.py check
+      - name: No model change without a migration
+        run: python manage.py makemigrations --check --dry-run
+      - name: Migrate a clean database
+        run: python manage.py migrate --noinput
+      - name: Tests
+        run: python manage.py test --noinput
