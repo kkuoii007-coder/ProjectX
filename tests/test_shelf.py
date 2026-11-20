@@ -1043,8 +1043,12 @@ class ShelfListTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "On the shelf")
         self.assertNotContains(response, "data-shelf-book")
-        # The examples of what to type stay, without the claim.
-        self.assertContains(response, "For example: Plato, the cave.")
+        # PR 3: with an empty shelf the page does not offer to ask about a
+        # book: no field, no examples, an honest line instead.
+        self.assertNotContains(response, 'name="topic"')
+        self.assertNotContains(response, "Ask about a book on our shelf.")
+        self.assertContains(response, "There are no books on our shelf yet.")
+        self.assertContains(response, "На полке пока нет книг")
 
     def test_book_appears_when_its_document_is_ready(self):
         _run("import_shelf_book", manifest=FIXTURE_MANIFEST)

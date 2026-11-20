@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.operations.models import Report
+from apps.sources.shelf import book_for_text
 
 from .models import Collection, Favorite, Publication, Thinker
 from .presenters import about_text, cover_lines, fork_scope, outline, publication_item, reader_parts, reader_terms, titles, tone
@@ -99,6 +100,9 @@ def read(request, slug):
         "next": publication_item(following) if following else None,
         "is_favorite": is_favorite,
         "report_categories": REPORT_CATEGORIES,
+        # The text -> book link is data (the edition lists the texts that
+        # retell it). Only a signed-in reader can ask, so only he is offered.
+        "shelf_book": book_for_text(publication.slug) if request.user.is_authenticated else None,
     }
     return render(request, "library/read.html", context)
 

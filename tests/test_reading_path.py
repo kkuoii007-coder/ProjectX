@@ -22,7 +22,7 @@ from apps.library.presenters import about_text, cover_lines, fork_scope, reader_
 from apps.library.services import publish_revision
 from apps.operations.models import AuditEvent
 
-from .helpers import publish_demo_fixture
+from .helpers import publish_demo_fixture, put_book_on_shelf
 from .test_editorial_path import PASS_REVIEW, TEXT_FILE, StubReviewer, card_data, run_review, text_data
 
 SLUG = "what-does-it-mean-to-be-brave"
@@ -947,12 +947,14 @@ class ServicePagesTests(ReadingBase):
     def test_workshop_form_moved_from_the_home_page_to_its_own_page(self):
         self.assertEqual(self.client.get("/projects/new/").status_code, 302)  # guests are sent to sign in
         self.client.force_login(self.user)
+        put_book_on_shelf()  # the form is offered only when there is a book to ask about
         response = self.client.get("/projects/new/")
         content = page(response)
         self.assertRegex(content, r'<html[^>]*\blang="ru"')
         self.assertIn('data-cover="clay"', content)
         self.assertNotIn("data-ru-toggle", content)
-        self.assertIn("О какой философской идее вы хотите прочитать?", content)
+        self.assertIn("Ask about a book on our shelf.", content)
+        self.assertIn("Ваш вопрос о книге", content)
         self.assertIn('name="topic"', content)
         self.assertIn("csrfmiddlewaretoken", content)
         self.assertIn(f"<strong>{response.context['costs']['generate']}</strong>", content)
@@ -962,7 +964,7 @@ class ServicePagesTests(ReadingBase):
         self.client.force_login(self.user)
         response = self.client.post("/projects/new/", {"mode": "explain_topic", "topic": ""})
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Введите тему запроса", page(response))
+        self.assertIn("Введите вопрос о книге", page(response))
         self.assertIn("costs", response.context)
 
     def test_favourites_list_only_texts_that_still_open(self):

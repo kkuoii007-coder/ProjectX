@@ -98,6 +98,19 @@ claim_support сохраняет ссылки на evidence и разрешён�
 При удалении SourceChunk исчезает доказательная связь, а не появляется копия текста.
 Серверные citation_id существуют внутри действия и сверяются с RetrievalItem.
 
+Ответ с источником (версия 1.7). В payload у каждой части
+sources: [{citation_id, label, locator, excerpt, book}], на уровне ревизии —
+based_on (названия книг) и source_editions (book, book_ru, attribution, links —
+пары «подпись, адрес»: цифровой издатель, файл источника, лицензия). Это
+снимок: страница рендерится из него, а не из полки.
+На каждую действительную ссылку создаётся EvidenceLink: kind claim_support,
+support_type quote, citation_id (S1…S8), source_chunk, claim_text — отрывок из
+книги, locator_json = {part (с нуля), label, locator, start, end
+(символы фрагмента)}. На каждое издание — RevisionSource с role primary и
+provenance_json издания (ключ, переводчик, лицензия, sha256 источника, версия и
+hash документа). RetrievalItem хранит все найденные фрагменты задачи с рангом,
+оценками поиска и признаком support в score_json.
+
 Message: project, owner, role, kind, body, job nullable, created_at.
 Системный prompt хранить отдельно от пользовательского диалога.
 
@@ -115,7 +128,11 @@ error_code, timestamps. Unique(owner, idempotency_key).
 kind: generate/edit_series/edit_part/edit_sentence/ask/import_source/index_source/
 search_sources/review. review — живая проверка существующей ревизии без генерации,
 repair и пользовательских кредитов (reserved_credits=0).
-outcome: delivered/needs_clarification/refused/needs_broader_edit/no_charge_failure.
+outcome: delivered/needs_clarification/refused/needs_broader_edit/no_charge_failure/
+no_source. no_source — на полке нет опоры для вопроса: ревизия не создаётся, резерв
+снимается без списания, читателю сохраняется короткое объяснение.
+error_code ответа с источником: source_validation_failed (с outcome
+no_charge_failure), search_unavailable (status=failed).
 status=succeeded означает завершение и доставку результата, не обязательно списание.
 no_charge_failure допустим только с сохранённым бесплатным объяснением; необработанная
 техническая задача имеет status=failed и не маскируется под содержательный отказ.

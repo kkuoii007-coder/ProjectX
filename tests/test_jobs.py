@@ -17,6 +17,8 @@ from apps.ai.services import (
 from apps.credits.models import Wallet, grant_welcome_credits
 from apps.workshop.models import Project
 
+from .helpers import put_book_on_shelf, shelf_search
+
 
 class CreateJobTests(TestCase):
     def setUp(self):
@@ -57,8 +59,11 @@ class CreateJobTests(TestCase):
         self.assertEqual(wallet.reserved_credits, 10)
 
 
+@shelf_search()
 class WorkerTests(TestCase):
     def setUp(self):
+        # `generate` answers from the shelf (PR 3): the book and the search are there.
+        put_book_on_shelf()
         self.user = User.objects.create_user(login="workeruser", password="TestPassword123!")
         grant_welcome_credits(self.user)
         self.project = Project.objects.create(owner=self.user, title="T", mode=Project.Mode.EXPLAIN)

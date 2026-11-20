@@ -32,6 +32,8 @@ class AIJob(models.Model):
         REFUSED = "refused"
         BROADER_EDIT = "needs_broader_edit"
         NO_CHARGE_FAILURE = "no_charge_failure"
+        # The shelf has no support for the question: no revision, no debit.
+        NO_SOURCE = "no_source"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ai_jobs")

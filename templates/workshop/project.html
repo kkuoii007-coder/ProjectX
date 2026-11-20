@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
-{% block title %}{{ project.title }} · Мастерская · Philosophy Reader{% endblock %}
+{% block title %}{{ project.title|truncatechars:80 }} · Мастерская · Philosophy Reader{% endblock %}
 {% block content %}
 <header class="page-head page-head--compact">
   <div class="wrap">
     <p class="kicker">Мастерская</p>
-    <h1>{{ project.title }}</h1>
+    {# A long question is cut in the heading; the reader sees it in full below. #}
+    <h1>{{ project.title|truncatechars:80 }}</h1>
   </div>
   {% include 'includes/fork.html' %}
 </header>
@@ -12,13 +13,18 @@
   <div class="wrap page-body">
     <p class="workshop-back"><a class="tap" href="{% url 'account:dashboard' %}">Вернуться в кабинет</a></p>
     {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    {% if question %}<p class="asked"><span class="asked__label">Ваш вопрос</span> <span class="asked__text">{{ question }}</span></p>{% endif %}
     {% if revision %}
     <article class="workshop-reading">
       {% if revision.payload.note %}<p class="warning">{{ revision.payload.note }}</p>{% endif %}
+      {# Books come from the stored revision, not from the shelf of today. #}
+      {% if revision.payload.based_on %}<p class="draft-mark" lang="en">AI draft. Based on: {{ revision.payload.based_on|join:"; " }}.<span class="ru-ui" lang="ru">Черновик ИИ. Опирается на: {% for edition in source_editions %}{% if edition.book_ru %}{{ edition.book_ru }}{% else %}{{ edition.book }}{% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}.</span></p>{% endif %}
       <h2>{{ revision.payload.title_ru }}</h2>
       {% for part in parts %}
       <section class="section-gap-small">
         <h3 lang="en">{{ part.title_en }}</h3>
+        {# An answer with sources cannot be edited yet: no edit forms, and the server refuses the job. #}
+        {% if not sourced %}
         <details class="workshop-edit">
           <summary>Изменить часть</summary>
           <form method="post" action="{% url 'workshop:edit_fragment' project.pk %}" class="inline edit-part-form">
@@ -31,10 +37,12 @@
             <button type="submit" class="btn btn--small">Изменить часть</button>
           </form>
         </details>
+        {% endif %}
         {% for s in part.sentences %}
         <div class="workshop-sentence">
           <span class="s" lang="en" data-gloss="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.en }}</span>
           <span class="gloss" role="note" lang="ru" id="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.ru }}</span>
+          {% if not sourced %}
           <details class="workshop-edit">
             <summary>Изменить предложение</summary>
             <form method="post" action="{% url 'workshop:edit_fragment' project.pk %}" class="inline edit-sentence">
@@ -47,18 +55,61 @@
               <button type="submit" class="btn btn--small">Изменить</button>
             </form>
           </details>
+          {% endif %}
         </div>
         {% endfor %}
+        {# One line per source of the part. A native details element: opens from the keyboard and without JavaScript. #}
+        {% if part.sources %}
+        <div class="sources">
+          {% for source in part.sources %}
+          <details class="source">
+            <summary><span lang="en">Source: {{ source.label }}</span> <span class="ru-ui" lang="ru">Источник</span></summary>
+            <blockquote class="source__excerpt" lang="en">{{ source.excerpt }}</blockquote>
+            {% if source.attribution %}<p class="source__attribution" lang="en">{{ source.attribution }}{% include 'includes/edition_links.html' with links=source.links %}</p>{% endif %}
+          </details>
+          {% endfor %}
+        </div>
+        {% endif %}
       </section>
       {% endfor %}
     </article>
+    {% elif state == 'no_source' %}
+    <section class="refusal" aria-labelledby="refusal-title">
+      <h2 class="refusal__title" id="refusal-title" lang="en">We have no source for this yet.<span class="ru-ui" lang="ru">У нас пока нет источника для этого вопроса.</span></h2>
+      {% if no_charge %}<p class="refusal__line" lang="en">No credits were taken.<span class="ru-ui" lang="ru">Кредиты не списаны.</span></p>{% endif %}
+      {% if shelf_books %}
+      <p class="refusal__line" lang="en">You can ask about a book on our shelf:<span class="ru-ui" lang="ru">Можно спросить о книге с нашей полки:</span></p>
+      <div class="shelf-list">
+        {% for book in shelf_books %}
+        <p class="meta" lang="en" data-shelf-book>{{ book.attribution }}{% include 'includes/edition_links.html' with links=book.links %}<span class="ru-ui" lang="ru">{% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></p>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {# With an empty shelf the question page has no form: the button does not lead there. #}
+      <p class="refusal__next">{% if shelf_books %}<a class="btn" href="{% url 'workshop:create_project' %}" lang="en">Ask another question</a><span class="ru-ui" lang="ru">Задать другой вопрос</span>{% else %}<a class="btn" href="{% url 'library:home' %}" lang="en">Go to the library</a><span class="ru-ui" lang="ru">Перейти в библиотеку</span>{% endif %}</p>
+    </section>
+    {% elif state == 'search_unavailable' %}
+    <section class="refusal" aria-labelledby="refusal-title">
+      <h2 class="refusal__title" id="refusal-title" lang="en">Search is not available now. Try again later.<span class="ru-ui" lang="ru">Поиск по книгам сейчас недоступен. Попробуйте позже.</span></h2>
+      {% if no_charge %}<p class="refusal__line" lang="en">No credits were taken.<span class="ru-ui" lang="ru">Кредиты не списаны.</span></p>{% endif %}
+      <p class="refusal__next">{% if shelf_books %}<a class="btn" href="{% url 'workshop:create_project' %}" lang="en">Ask again</a><span class="ru-ui" lang="ru">Задать вопрос ещё раз</span>{% else %}<a class="btn" href="{% url 'library:home' %}" lang="en">Go to the library</a><span class="ru-ui" lang="ru">Перейти в библиотеку</span>{% endif %}</p>
+    </section>
+    {% elif state == 'failed' or state == 'explained' or state == 'source_validation_failed' %}
+    <section class="refusal" aria-labelledby="refusal-title">
+      <h2 class="refusal__title" id="refusal-title" lang="en">The text was not made.<span class="ru-ui" lang="ru">Текст не создан.</span></h2>
+      {% if refusal_line %}<p class="refusal__line" lang="ru">{{ refusal_line }}</p>{% endif %}
+      {% if no_charge %}<p class="refusal__line" lang="en">No credits were taken.<span class="ru-ui" lang="ru">Кредиты не списаны.</span></p>{% endif %}
+      <p class="refusal__next">{% if shelf_books %}<a class="btn" href="{% url 'workshop:create_project' %}" lang="en">Ask another question</a><span class="ru-ui" lang="ru">Задать другой вопрос</span>{% else %}<a class="btn" href="{% url 'library:home' %}" lang="en">Go to the library</a><span class="ru-ui" lang="ru">Перейти в библиотеку</span>{% endif %}</p>
+    </section>
     {% else %}
     <p class="workshop-empty" aria-live="polite">Текст ещё не создан. Проверьте статус задачи в кабинете.</p>
     {% endif %}
   </div>
 </section>
 
-<div class="wrap">
+{# A final screen without a text has no versions and no discussion. #}
+{% if state == 'text' or state == 'waiting' %}
+<div class="wrap workshop-service">
   <section class="section-gap">
     <h2 class="section-title">Версии</h2>
     <p class="table-scroll__hint">Таблицу можно листать вбок.</p>
@@ -77,7 +128,8 @@
             <td>{{ r.created_at|date:"d.m.Y H:i" }}</td>
             <td><code>{{ r.content_hash|truncatechars:12 }}</code>{% if project.head_revision_id == r.pk %} (текущая){% endif %}</td>
             <td>
-              <a class="tap" href="{% url 'workshop:revision_diff' project.pk r.pk %}">Сравнить</a>
+              {# An answer with sources has one version; there is nothing to compare it with. #}
+              {% if not sourced %}<a class="tap" href="{% url 'workshop:revision_diff' project.pk r.pk %}">Сравнить</a>{% endif %}
               {% if project.head_revision_id != r.pk %}
               <form method="post" action="{% url 'workshop:apply_head' project.pk %}" class="inline">
                 {% csrf_token %}
@@ -119,4 +171,5 @@
     {% endif %}
   </section>
 </div>
+{% endif %}
 {% endblock %}

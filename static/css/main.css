@@ -399,11 +399,12 @@ textarea::placeholder {
   opacity: 1;
 }
 
-/* Rotating shelf examples under the workshop topic field (JS only; without
-   JS the first example is the placeholder itself). */
+/* Rotating examples of a question under the workshop field (JS only; without
+   JS the first example stays, and it is the placeholder too). */
 .workshop-examples {
   min-height: 1.5em;
-  margin-top: var(--s-2);
+  margin: calc(-1 * var(--s-2)) 0 var(--s-2);
+  overflow-wrap: anywhere;
 }
 
 .helptext,
@@ -1566,15 +1567,27 @@ html:not(.js) [data-ru-toggle] {
 }
 
 /* The only way to reach us: a full-size tap target. */
-.contact a {
+.contact a,
+.ask-book a {
   display: inline-flex;
   align-items: center;
   min-height: 2.75rem;
   padding-right: var(--s-4);
 }
 
-.contact .ru-ui {
+.contact .ru-ui,
+.ask-book .ru-ui {
   font-weight: 400;
+}
+
+/* "Ask about this book": for a signed-in reader, under the source of the text. */
+.ask-book {
+  margin: var(--s-3) 0 0;
+  font-weight: 600;
+}
+
+.ask-book .ru-ui {
+  color: var(--ink-3);
 }
 
 .reader-tools {
@@ -1826,6 +1839,175 @@ html:not(.js) [data-ru-toggle] {
 
 .workshop-empty {
   color: var(--ink-2);
+}
+
+/* The shelf above the question field and on the refusal screen: books come
+   from data, each with the attribution line of its edition. */
+.shelf-ask {
+  margin: 0 0 var(--s-3);
+  font: 600 var(--fs-3)/1.3 var(--font-text);
+}
+
+.shelf-ask .ru-ui,
+.shelf-empty .ru-ui {
+  margin-top: var(--s-1);
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.shelf-list {
+  max-width: 42rem;
+  margin: 0 0 var(--s-5);
+}
+
+.shelf-list p {
+  margin: 0;
+  padding: var(--s-3) 0 var(--s-3) var(--s-4);
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.shelf-list p + p {
+  margin-top: var(--s-3);
+}
+
+.shelf-list .ru-ui {
+  margin-top: var(--s-1);
+  color: var(--ink-3);
+}
+
+.shelf-empty {
+  max-width: 42rem;
+  font-weight: 600;
+}
+
+/* "AI draft. Based on: ..." above an answer with sources. */
+.draft-mark {
+  margin: 0 0 var(--s-5);
+  font: 500 var(--fs-1)/1.4 var(--font-ui);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.draft-mark .ru-ui {
+  margin-top: var(--s-1);
+  color: var(--ink-3);
+}
+
+/* The reader's question in full, in every state of the project page: the
+   heading above may be cut. */
+.asked {
+  max-width: 42rem;
+  margin: 0 0 var(--s-5);
+  overflow-wrap: anywhere;
+}
+
+.asked__label {
+  display: block;
+  margin-bottom: var(--s-1);
+  font: 500 var(--fs-0)/1.4 var(--font-ui);
+  color: var(--ink-3);
+}
+
+.asked__text {
+  white-space: pre-line; /* the line breaks the reader typed */
+  font: 400 var(--fs-2)/1.5 var(--font-text);
+  color: var(--ink);
+}
+
+/* One line per source under a part. A native details element: the summary is
+   the line, the excerpt and the attribution open under it. */
+.sources {
+  margin-top: var(--s-3);
+}
+
+.source {
+  font: 400 var(--fs-1)/1.5 var(--font-ui);
+}
+
+.source summary {
+  box-sizing: border-box;
+  min-height: 44px; /* a touch target at every width */
+  padding-block: 0.7rem;
+  color: var(--ink-2);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+/* The space between the line and its caption is in the markup. */
+.source summary .ru-ui {
+  display: inline;
+  margin-left: 0.25em;
+  color: var(--ink-3);
+}
+
+.source[open] {
+  margin-block: var(--s-2) var(--s-3);
+  padding: 0 var(--s-4) var(--s-4);
+  background: var(--paper-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.source__excerpt {
+  margin: var(--s-2) 0 var(--s-3); /* clear of the focus ring of the line above */
+  padding: 0 0 0 var(--s-4);
+  border-left: 2px solid var(--line-strong);
+  font: 400 var(--fs-2)/1.5 var(--font-text);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.source__attribution {
+  margin: 0;
+  font-size: var(--fs-0);
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* Links after an attribution line: digital publisher, source file, licence. */
+.edition-links {
+  display: block;
+  margin-top: var(--s-1);
+}
+
+.edition-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px; /* a touch target on a phone */
+}
+
+/* A final screen without a text: no source, search is down, or the answer
+   did not pass the check of its sources. */
+.refusal {
+  max-width: 42rem;
+}
+
+.refusal__title {
+  margin: 0 0 var(--s-4);
+  font: 600 var(--fs-4)/1.2 var(--font-text);
+  overflow-wrap: anywhere;
+}
+
+.refusal__title .ru-ui {
+  margin-top: var(--s-2);
+  font-size: var(--fs-1);
+  color: var(--ink-3);
+}
+
+.refusal__line {
+  margin: 0 0 var(--s-4);
+}
+
+.refusal__line .ru-ui,
+.refusal__next .ru-ui {
+  margin-top: var(--s-1);
+  color: var(--ink-3);
+}
+
+.refusal__next {
+  margin: var(--s-5) 0 0;
 }
 
 .discourse {
@@ -2170,5 +2352,52 @@ html:not(.js) [data-ru-toggle] {
 
   .gloss {
     display: none !important;
+  }
+
+  /* The workshop: the answer goes on paper with its sources opened; the
+     way back, the versions and the discussion do not. */
+  .workshop-back,
+  .workshop-service,
+  .workshop-edit,
+  .refusal__next {
+    display: none !important;
+  }
+
+  /* A closed <details> is printed open: the excerpt and the edition. Where
+     ::details-content is not supported, reader.js opens the lines before
+     printing. */
+  .source::details-content {
+    display: block;
+    content-visibility: visible;
+  }
+
+  .source,
+  .source[open] {
+    margin-block: 0 0.5rem;
+    padding: 0;
+    background: none;
+    border: 0;
+    break-inside: avoid;
+  }
+
+  .source summary {
+    min-height: 0;
+    padding-block: 0.2rem;
+    list-style: none;
+    color: #000;
+  }
+
+  .source summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .source__excerpt,
+  .source__attribution,
+  .edition-links a {
+    color: #000;
+  }
+
+  .edition-links a {
+    min-height: 0;
   }
 }

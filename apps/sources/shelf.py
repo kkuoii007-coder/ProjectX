@@ -101,3 +101,9 @@ def book_for_text(slug: str):
         if slug in book.related_texts:
             return book
     return None
+
+
+def edition_links(edition) -> tuple:
+    """(label, url) pairs for the attribution of an edition, as in
+    `ShelfBook.links`; an answer stores them in its revision."""
+    return _links(edition)

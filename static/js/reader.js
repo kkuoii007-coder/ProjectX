@@ -320,13 +320,33 @@
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return; // Keep the first example only; the form stays fully usable.
     }
+    // The field named by the group shows the same example as its placeholder.
+    var field = doc.getElementById(group.getAttribute('data-topic-examples') || '');
     var current = 0;
     function showNext() {
       items[current].hidden = true;
       current = (current + 1) % items.length;
       items[current].hidden = false;
+      var example = items[current].getAttribute('data-example');
+      if (field && example) { field.placeholder = example; }
     }
     window.setInterval(showNext, 4000);
+  }
+
+  /* ---- printing an answer: every source line goes on paper opened ---------- */
+
+  function initPrintSources() {
+    var opened = [];
+    window.addEventListener('beforeprint', function () {
+      var lines = doc.querySelectorAll('details.source:not([open])');
+      for (var i = 0; i < lines.length; i += 1) {
+        lines[i].open = true;
+        opened.push(lines[i]);
+      }
+    });
+    window.addEventListener('afterprint', function () {
+      while (opened.length) { opened.pop().open = false; }
+    });
   }
 
   // The page without the script: nothing is hidden, and the controls the
@@ -355,6 +375,7 @@
       initMenu();
       initForks();
       initTopicExamples();
+      initPrintSources();
       // Enhance only when everything above worked. The page waits for this
       // mark: without it the inline script in <head> takes the js class back.
       root.setAttribute('data-js-ready', '');

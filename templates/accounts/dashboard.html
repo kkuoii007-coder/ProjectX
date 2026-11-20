@@ -15,7 +15,7 @@
         <div class="cards">
             {% for p in projects %}
             <article class="card">
-                <h3><a class="tap" href="{% url 'workshop:project' p.pk %}">{{ p.title }}</a></h3>
+                <h3><a class="tap" href="{% url 'workshop:project' p.pk %}">{{ p.title|truncatechars:80 }}</a></h3>
                 <p class="meta">{{ p.get_mode_display }}</p>
             </article>
             {% empty %}
