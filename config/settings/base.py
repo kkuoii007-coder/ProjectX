@@ -19,6 +19,10 @@ def env_int(name, default):
     return int(env(name, default))
 
 
+def env_float(name, default):
+    return float(env(name, default))
+
+
 SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me")
 DEBUG = False
 ALLOWED_HOSTS = [h.strip() for h in env("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
@@ -132,6 +136,9 @@ AI_LEASE_SECONDS = 300
 AI_UNRESOLVED_USER_TIMEOUT_MINUTES = 15
 GLOBAL_QUEUE_CAPACITY = 50
 MAX_USER_PROMPT_CHARS = 2000
+# A question about a book on the shelf (the workshop entry form). A longer
+# question is refused with a message, never cut silently.
+MAX_QUESTION_CHARS = 500
 MAX_EDIT_INSTRUCTION_CHARS = 1000
 USER_AI_REQUESTS_PER_HOUR = 20
 WEB_SEARCH_ENABLED = False
@@ -163,6 +170,20 @@ SEARCH_RESULTS_MAX = env_int("SEARCH_RESULTS_MAX", 5)
 USER_ACTIVE_DOCUMENTS_MAX = env_int("USER_ACTIVE_DOCUMENTS_MAX", 10)
 RETRIEVAL_MAX_CHUNKS = env_int("RETRIEVAL_MAX_CHUNKS", 8)
 EMBEDDING_BATCH_SIZE = env_int("EMBEDDING_BATCH_SIZE", 16)
+# Answer with a source: a found fragment counts as support for the question
+# when its cosine similarity OR its text coverage reaches the threshold.
+# With no support the question is refused before any paid model call.
+# Both defaults are deliberately low: a wrong refusal of a real question is
+# worse than one extra model call, and the model refuses a second time when
+# the fragments do not answer the question.
+# - Coverage 0.5: on the full book the eight control questions reach 1.0 in
+#   the text half, questions about other authors asked in English reach
+#   0.40-0.46 ("thrownness in Heidegger", "Kant ... the state and freedom").
+# - Similarity 0.20: NOT calibrated (a calibration is a paid call). Set it
+#   from the scores printed by `search_sources` / `shelf_experiment`
+#   on the server.
+SHELF_MIN_VECTOR_SIMILARITY = env_float("SHELF_MIN_VECTOR_SIMILARITY", 0.20)
+SHELF_MIN_FTS_COVERAGE = env_float("SHELF_MIN_FTS_COVERAGE", 0.5)
 
 LIVE_AI_ENABLED = env_bool("LIVE_AI_ENABLED", False)
 AI_PROVIDER = env("AI_PROVIDER", "fake")

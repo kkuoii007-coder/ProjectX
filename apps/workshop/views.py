@@ -2,26 +2,53 @@ import uuid
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from apps.ai.grounding import has_sources
 from apps.ai.models import AIJob
-from apps.ai.services import InsufficientCredits, JobConflict, JobError, QueueFull, create_job
+from apps.ai.services import EDIT_NOT_SUPPORTED_MESSAGE, InsufficientCredits, JobConflict, JobError, QueueFull, create_job
 from apps.sources.shelf import shelf_books
 
+from .asking import QuestionRefused, normalize_question, open_question
 from .models import Message, Project, Revision
 
 
-# Presentation-only examples of what to type in the workshop entry form.
-# They say nothing about the shelf: the books on the shelf come from data
-# (apps.sources.shelf.shelf_books) and are listed under the form separately.
+# Presentation-only examples of a question in the workshop entry form. The
+# books themselves come from data (apps.sources.shelf.shelf_books) and are
+# listed above the field; the examples are shown only when the shelf is not
+# empty and must be answerable from it.
 TOPIC_EXAMPLES = (
-    "Aristotle, Politics",
-    "Plato, the cave",
-    "Socrates, asking questions",
+    "Почему Аристотель называет человека политическим животным?",
+    "Кого Аристотель считает гражданином?",
+    "Какие виды государственного устройства различает Аристотель?",
 )
+
+
+def _edition_links(url, license_name, license_url) -> list:
+    """Links shown next to the attribution line of an edition: where the
+    digital text comes from and its licence. Only web addresses become
+    links; the values come from the manifest or from a stored snapshot."""
+    links = []
+    if str(url or "").startswith(("https://", "http://")):
+        links.append({"href": url, "en": "Digital text", "ru": "Электронный текст"})
+    if str(license_url or "").startswith(("https://", "http://")):
+        links.append({"href": license_url, "en": f"License: {license_name}" if license_name else "License", "ru": "Лицензия"})
+    return links
+
+
+def _shelf_for_page() -> list:
+    """The books on the shelf as the pages list them (data, not code)."""
+    return [
+        {
+            "label": book.label,
+            "label_ru": book.label_ru,
+            "attribution": book.attribution,
+            "links": _edition_links(book.edition.url, book.edition.license, book.edition.license_url),
+        }
+        for book in shelf_books()
+    ]
 
 
 def _create_page(request, status=200, **extra):
@@ -32,7 +59,8 @@ def _create_page(request, status=200, **extra):
         {
             "costs": settings.CREDIT_COSTS,
             "placeholder_examples": TOPIC_EXAMPLES,
-            "shelf_books": shelf_books(),
+            "shelf_books": _shelf_for_page(),
+            "max_question_chars": settings.MAX_QUESTION_CHARS,
             **extra,
         },
         status=status,
@@ -46,25 +74,19 @@ def create_project(request):
         mode = request.POST.get("mode", Project.Mode.EXPLAIN)
         if mode not in Project.Mode.values:
             return redirect("library:home")
-        title = request.POST.get("topic", "").strip()[:200]
-        if not title or len(title) > 2000:
-            return _create_page(request, error="Введите тему запроса")
+        raw = request.POST.get("topic", "")
         try:
-            with transaction.atomic():
-                project = Project.objects.create(owner=request.user, title=title, mode=mode)
-                job, _ = create_job(
-                    owner=request.user,
-                    kind=AIJob.Kind.GENERATE,
-                    idempotency_key=uuid.uuid4().hex,
-                    instruction=title,
-                    project=project,
-                )
+            project, _ = open_question(owner=request.user, question=raw, mode=mode)
+        except QuestionRefused as exc:
+            # Refused before a project, a job or a reservation; a question
+            # that is too long is not cut: the reader keeps what he typed.
+            return _create_page(request, status=exc.status, error=str(exc), topic=normalize_question(raw))
         except InsufficientCredits:
             # Атомарный блок уже откатился: проект не создан. Рендерим вне транзакции,
             # иначе контекст-процессор упадёт на запросе в прерванной транзакции.
-            return _create_page(request, status=402, error="Недостаточно кредитов для этого действия", topic=title)
+            return _create_page(request, status=402, error="Недостаточно кредитов для этого действия", topic=normalize_question(raw))
         except (JobConflict, QueueFull, JobError) as exc:
-            return _create_page(request, status=409, error=str(exc), topic=title)
+            return _create_page(request, status=409, error=str(exc), topic=normalize_question(raw))
         return redirect("workshop:project", project_id=project.pk)
     return _create_page(request)
 
@@ -76,15 +98,60 @@ def project_detail(request, project_id):
     return render(request, "workshop/project.html", _project_context(request, project))
 
 
+def _parts_with_sources(payload):
+    """Parts of a revision for the page; every source line also gets the
+    attribution of its edition and the links to the digital text and the
+    licence. Everything comes from the stored snapshot, not from the shelf."""
+    editions = {
+        edition.get("book"): {
+            "attribution": edition.get("attribution", ""),
+            "links": _edition_links(edition.get("url"), edition.get("license"), edition.get("license_url")),
+        }
+        for edition in payload.get("source_editions") or []
+    }
+    nothing = {"attribution": "", "links": []}
+    return [
+        {**part, "sources": [{**source, **editions.get(source.get("book"), nothing)} for source in part.get("sources") or []]}
+        for part in payload.get("parts", [])
+    ]
+
+
+def _no_text_state(project):
+    """Why a project has no text, from its `generate` job: `waiting`,
+    `no_source`, `search_unavailable`, `source_validation_failed`,
+    `explained` (the model asked to clarify or refused) or `failed`."""
+    job = project.jobs.filter(kind=AIJob.Kind.GENERATE).order_by("-created_at").first()
+    if job is None or job.status in (AIJob.Status.QUEUED, AIJob.Status.RUNNING):
+        return "waiting"
+    if job.outcome == AIJob.Outcome.NO_SOURCE:
+        return "no_source"
+    if job.error_code in ("search_unavailable", "source_validation_failed"):
+        return job.error_code
+    if job.outcome in (AIJob.Outcome.CLARIFICATION, AIJob.Outcome.REFUSED):
+        return "explained"
+    return "failed"
+
+
 def _project_context(request, project):
     revision = project.head_revision
-    return {
+    payload = revision.payload if revision else {}
+    state = "text" if revision else _no_text_state(project)
+    context = {
         "project": project,
         "messages_list": Message.objects.filter(project=project, owner=request.user).select_related("job"),
         "revision": revision,
         "revisions": project.revisions.order_by("-created_at")[:20],
-        "parts": revision.payload.get("parts", []) if revision else [],
+        "parts": _parts_with_sources(payload),
+        # An answer with sources: no edit forms (see edit_fragment).
+        "sourced": has_sources(payload),
+        "source_editions": payload.get("source_editions") or [],
+        "state": state,
     }
+    if state not in ("text", "waiting"):
+        # A final screen without a text: no versions, no discussion.
+        context["shelf_books"] = _shelf_for_page()
+        context["explanation"] = Message.objects.filter(project=project, owner=request.user, role="assistant", kind="explanation").order_by("-created_at").first()
+    return context
 
 
 @require_POST
@@ -131,6 +198,9 @@ def edit_fragment(request, project_id):
     base = project.head_revision
     if base is None:
         return render(request, "workshop/project.html", {"project": project, "error": "Нечего править: ревизии ещё нет"}, status=400)
+    if has_sources(base.payload):
+        # Refused here and in create_job: no job, no reservation.
+        return render(request, "workshop/project.html", {**_project_context(request, project), "error": EDIT_NOT_SUPPORTED_MESSAGE}, status=409)
     parts = base.payload.get("parts", [])
     if not 0 <= part_idx < len(parts):
         return render(request, "workshop/project.html", {"project": project, "error": "Некорректная цель правки"}, status=400)

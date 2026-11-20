@@ -71,6 +71,8 @@
       {% if about.byline_en or about.source_en %}<p class="about__source">{{ about.byline_en }}{% if about.byline_en and about.source_en %} {% endif %}{% if about.source_en %}Source: {{ about.source_en }}.{% endif %}</p>{% endif %}
       {% if about.note_ru %}<p class="about__note" lang="ru">{{ about.note_ru }}</p>{% endif %}
       {% if not about.byline_en and not about.source_en and not about.note_ru %}<p class="about__note">A text in simple English.<span class="ru-ui" lang="ru">Текст на простом английском.</span></p>{% endif %}
+      {# Shown only to a signed-in reader and only when the book this text retells is on the shelf (data: apps.sources.shelf.book_for_text). #}
+      {% if shelf_book %}<p class="ask-book"><a href="{% url 'workshop:create_project' %}">Ask about this book</a><span class="ru-ui" lang="ru">Задать вопрос об этой книге: {% if shelf_book.label_ru %}{{ shelf_book.label_ru }}{% else %}{{ shelf_book.label }}{% endif %}</span></p>{% endif %}
     </section>
 
     <section class="end-block next" aria-label="What is next">

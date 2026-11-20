@@ -38,6 +38,17 @@ class AskDisabled(JobError):
     code = "ask_disabled"
 
 
+class EditNotSupported(JobError):
+    """An answer with sources cannot be edited yet: after an edit the source
+    line under the part would no longer confirm it."""
+
+    code = "edit_not_supported"
+
+
+EDIT_KINDS = (AIJob.Kind.EDIT_SENTENCE, AIJob.Kind.EDIT_PART, AIJob.Kind.EDIT_SERIES)
+EDIT_NOT_SUPPORTED_MESSAGE = "Правка ответа с источниками пока не поддерживается: после правки строка источника перестала бы подтверждать часть. Задайте новый вопрос."
+
+
 def canonical_hash(payload):
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -48,7 +59,13 @@ def create_job(*, owner, kind, idempotency_key, instruction="", project=None, ba
     if kind == AIJob.Kind.ASK and not settings.ASK_ENABLED:
         # Refused for every caller before any job, reservation or message.
         raise AskDisabled("Вопросы по тексту пока выключены")
-    input_json = {"instruction": instruction.strip()[: settings.MAX_EDIT_INSTRUCTION_CHARS if kind in (AIJob.Kind.EDIT_SENTENCE, AIJob.Kind.EDIT_PART, AIJob.Kind.EDIT_SERIES) else settings.MAX_USER_PROMPT_CHARS], "kind": kind}
+    if kind in EDIT_KINDS and base_revision is not None:
+        from .grounding import has_sources
+
+        if has_sources(base_revision.payload):
+            # Refused before any job, reservation or message.
+            raise EditNotSupported(EDIT_NOT_SUPPORTED_MESSAGE)
+    input_json = {"instruction": instruction.strip()[: settings.MAX_EDIT_INSTRUCTION_CHARS if kind in EDIT_KINDS else settings.MAX_USER_PROMPT_CHARS], "kind": kind}
     if target_id:
         input_json["target_id"] = target_id
     if base_revision is not None:
@@ -347,8 +364,13 @@ def get_provider():
 class FakeProvider:
     """Explicit development/test provider. Not a philosophical quality check."""
 
-    def generate(self, job):
+    def generate(self, job, sources=None, correction=None):
+        """With `sources`: a deterministic answer with sources (see
+        _grounded_answer). Without: the old free-form result, reached only
+        by the switched-off `ask` kind."""
         instruction = job.input_json.get("instruction", "")
+        if sources is not None:
+            return self._grounded_answer(instruction, sources, correction)
         return {
             "outcome": AIJob.Outcome.DELIVERED,
             "payload": {
@@ -370,6 +392,66 @@ class FakeProvider:
             "answer": f"Тестовый ответ FakeProvider по запросу: {instruction[:500]}",
         }
 
+    FAKE_PARTS = (
+        ("The question", [
+            ("You asked a question about a book on our shelf.", "Вы задали вопрос о книге с нашей полки."),
+            ("This is a test answer, not the answer of a live model.", "Это тестовый ответ, а не ответ живой модели."),
+        ]),
+        ("What the book says", [
+            ("The book speaks about it in this place.", "Книга говорит об этом в этом месте."),
+            ("Open the source line under this part to read the words of the book.", "Откройте строку источника под этой частью, чтобы прочитать слова книги."),
+        ]),
+        ("Where to read it", [
+            ("Each part of the answer has its own source.", "У каждой части ответа есть свой источник."),
+            ("The source line shows the place in the book.", "Строка источника показывает место в книге."),
+        ]),
+    )
+
+    @staticmethod
+    def _fake_quote(text, part_index):
+        """Fourteen words of the fragment, word for word; each part starts
+        at another third of it."""
+        words = text.split()
+        start = min(len(words) * part_index // 3, max(len(words) - 14, 0))
+        return " ".join(words[start:start + 14])
+
+    def _grounded_answer(self, instruction, sources, correction):
+        """Three parts, each resting on one of the given fragments with a
+        word-for-word quote from it.
+
+        Control words in the question (tests only): `no-source` — the
+        model's own refusal; `cite-outside` — a source id that was not
+        given; `misquote` — a quote that is not in the fragment;
+        `invent-quote` — words in quotation marks that are in no fragment.
+        With `-once` (`misquote-once`) the mistake is made in the first
+        answer only and the correction attempt is clean.
+        """
+        if "no-source" in instruction:
+            return {"outcome": AIJob.Outcome.NO_SOURCE, "payload": {}, "answer": "Тестовый отказ FakeProvider: фрагменты не отвечают на вопрос."}
+
+        def flagged(word):
+            return word in instruction and (correction is None or f"{word}-once" not in instruction)
+
+        parts = []
+        for index, (title, sentences) in enumerate(self.FAKE_PARTS):
+            source = sources[index % len(sources)]
+            parts.append({
+                "title_en": title,
+                "sentences": [{"en": en, "ru": ru} for en, ru in sentences],
+                "sources": [{"id": source["id"], "quote": self._fake_quote(source["text"], index)}],
+            })
+        if flagged("cite-outside"):
+            parts[1]["sources"] = [{"id": "S99", "quote": parts[1]["sources"][0]["quote"]}]
+        if flagged("misquote"):
+            parts[1]["sources"][0]["quote"] = "these words were never written in the book at all"
+        if flagged("invent-quote"):
+            parts[1]["sentences"].append({"en": "The book says: “the moon is made of green cheese”.", "ru": "В книге сказано: «луна сделана из зелёного сыра»."})
+        return {
+            "outcome": AIJob.Outcome.DELIVERED,
+            "payload": {"title_en": "A test answer", "title_ru": "Тестовый ответ по вашему вопросу", "parts": parts, "glossary": []},
+            "answer": "",
+        }
+
     def edit(self, job, context=None):
         """Deterministic edit decisions for dev/test only."""
         target = job.input_json.get("target_id", "")
@@ -389,10 +471,10 @@ class FakeProvider:
         new_sentences = [{"en": "Edited part for testing (test provider).", "ru": "Исправленная часть для теста (тестовый провайдер)."}]
         return {"outcome": "edited", "part": {"title_en": part.get("title_en", ""), "sentences": new_sentences}}
 
-    def review(self, payload, job=None):
-        """Deterministic review for dev/test: pass unless flagged. The
-        instruction propagates into the generated payload, so flags are
-        recognizable there."""
+    def review(self, payload, job=None, sources=None):
+        """Deterministic review for dev/test: pass unless the job's
+        instruction carries a flag (`fail-review`, `repair-review`). A
+        repaired text is recognised by the word "repaired" in it."""
         instruction = (job.input_json.get("instruction", "") if job else "") or ""
         if "fail-review" in instruction:
             return {"verdict": "fail", "factual_state": "unsupported", "issues": [{"code": "unsupported", "severity": "blocking", "reason_ru": "Тестовая блокирующая проблема"}]}
@@ -413,9 +495,11 @@ class FakeProvider:
             "uncertainty_notes": ["Тестовый провайдер: живая проверка не выполнялась, фактическая опора не подтверждена"],
         }
 
-    def repair(self, payload, issues, job=None):
-        """Deterministic repair for dev/test: replaces the flagged marker
-        text so the re-review passes."""
+    def repair(self, payload, issues, job=None, sources=None):
+        """Deterministic repair for dev/test: the result carries the word
+        "repaired", so the re-review passes. For an answer with sources
+        (`sources` given) the control word `break-repair` in the question
+        makes the repaired text quote words that are not in the book."""
         if not payload:
             return None
         repaired = json.loads(json.dumps(payload))  # deep copy
@@ -427,6 +511,10 @@ class FakeProvider:
                         sentence[key] = value.replace("repair-review", "repaired")
                     if "fail-review" in value:
                         sentence[key] = value.replace("fail-review", "repaired")
+        if sources is not None and repaired.get("parts"):
+            repaired["parts"][0]["sentences"].append({"en": "This part was repaired (test provider).", "ru": "Эта часть исправлена (тестовый провайдер)."})
+            if "break-repair" in ((job.input_json.get("instruction", "") if job else "") or ""):
+                repaired["parts"][0]["sources"] = [{"id": sources[0]["id"], "quote": "these words were never written in the book at all"}]
         return repaired
 
 
@@ -517,6 +605,162 @@ def _build_edit_context(job):
     return context
 
 
+def _generate_checked(provider, job, retrieval):
+    """Generation with the structural check and one correction attempt.
+
+    Returns (result, checked, calls): `result` is the provider's answer,
+    `checked` the CheckedAnswer of a delivered series (None for a refusal).
+    A series that fails the check twice comes back with `checked.ok` False.
+    """
+    from . import grounding
+
+    sources = retrieval.model_sources()
+    supports = retrieval.supports
+    result = provider.generate(job, sources=sources)
+    calls = 1
+    if result["outcome"] != AIJob.Outcome.DELIVERED:
+        return result, None, calls
+    checked = grounding.check_answer(result["payload"], supports)
+    if not checked.ok and calls < settings.AI_MAX_PROVIDER_CALLS_PER_JOB:
+        # One correction by the same generator, with the list of violations.
+        result = provider.generate(job, sources=sources, correction={"candidate": result["payload"], "violations": checked.violations[:20]})
+        calls += 1
+        if result["outcome"] != AIJob.Outcome.DELIVERED:
+            return result, None, calls
+        checked = grounding.check_answer(result["payload"], supports)
+    return result, checked, calls
+
+
+def _review_grounded(provider, job, retrieval, series, checked, calls):
+    """Review of an answer with sources -> (payload, checked, review record).
+
+    The reviewer gets the candidate and the fragments its parts cite. The
+    owner's decision stands: a verdict other than "pass" never discards the
+    text, it adds a note. One repair is tried only if a repair and a fresh
+    review still fit into AI_MAX_PROVIDER_CALLS_PER_JOB, and the repaired
+    text must pass the structural check again; if it does not, the
+    candidate from before the repair is delivered with the note.
+    """
+    from . import grounding
+
+    def cited(answer):
+        return [grounding.as_model_source(fragment) for fragment in answer.cited_fragments()]
+
+    payload = grounding.build_payload(series, checked)
+    review = _clean_review(provider.review(payload, job, sources=cited(checked)))
+    calls += 1
+    if review["verdict"] == "pass":
+        return payload, checked, {"passed": True, "review": review}
+    note = _review_note_message(review)
+    if review["verdict"] == "repair" and calls + 2 <= settings.AI_MAX_PROVIDER_CALLS_PER_JOB:
+        repaired = provider.repair(series, review["issues"], job, sources=retrieval.model_sources())
+        if repaired is not None:
+            rechecked = grounding.check_answer(repaired, retrieval.supports)
+            if rechecked.ok:
+                repaired_payload = grounding.build_payload(repaired, rechecked)
+                second = _clean_review(provider.review(repaired_payload, job, sources=cited(rechecked)))
+                if second["verdict"] == "pass":
+                    return repaired_payload, rechecked, {"passed": True, "review": second}
+                return repaired_payload, rechecked, {"passed": False, "review": second, "message_ru": _review_note_message(second)}
+            note = (note[:380] + " Исправление не прошло проверку источников: оставлен текст до исправления.")[:500]
+    return payload, checked, {"passed": False, "review": review, "message_ru": note}
+
+
+def _execute_generate_job(job, provider):
+    """A question about a book on the shelf -> a text with a source line
+    under every part, or a refusal that costs the reader nothing.
+
+    Order: search (outside transactions) -> threshold -> generation from
+    the supports -> structural check (one correction) -> review (one
+    repair) -> one transaction that writes the revision, its links and the
+    money. Outcomes without a text never charge credits:
+    - `no_source`: nothing on the shelf supports the question (threshold,
+      no model call) or the model says the fragments do not answer it;
+    - failed `search_unavailable`: the vector half did not run and the
+      text half found no support — not the same as "no source";
+    - `no_charge_failure` + `source_validation_failed`: the sources of the
+      answer failed the check twice.
+    """
+    from . import grounding
+    from .models import QualityReport
+
+    retrieval = None
+    try:
+        retrieval = grounding.retrieve(job)
+        if not retrieval.supports:
+            if not retrieval.vector_available:
+                raise grounding.SearchUnavailable(grounding.SEARCH_UNAVAILABLE_MESSAGE)
+            result, checked, refusal_line = {"outcome": AIJob.Outcome.NO_SOURCE, "payload": {}, "answer": ""}, None, "threshold"
+        else:
+            result, checked, calls = _generate_checked(provider, job, retrieval)
+            refusal_line = "model"
+            if checked is not None and checked.ok:
+                payload, checked, review = _review_grounded(provider, job, retrieval, result["payload"], checked, calls)
+    except Exception as exc:
+        with transaction.atomic():
+            _save_provider_attempts(job, provider, "failed")
+            settle_reservation(job=job, charge=False)
+            job.status = AIJob.Status.FAILED
+            job.outcome = None
+            job.error_code = getattr(exc, "code", "provider_unavailable") if not isinstance(exc, JobError) else "ai_not_configured"
+            job.result_reference = {"message": str(exc)[:300]}
+            if retrieval is not None:
+                job.result_reference["search"] = retrieval.summary()
+            job.completed_at = timezone.now()
+            job.save()
+        return job
+
+    def explain(body):
+        Message.objects.create(project=job.project, owner=job.owner, role="assistant", kind="explanation", body=body[:1000], job=job)
+
+    attempts = getattr(provider, "_attempts", None) or []
+    with transaction.atomic():
+        outcome = result["outcome"]
+        if outcome == AIJob.Outcome.NO_SOURCE:
+            reason = (result.get("answer") or "").strip()
+            explain(grounding.NO_SOURCE_MESSAGE + (f" Пояснение модели: {reason}" if reason else ""))
+            job.result_reference = {"explanation": "saved", "refusal_line": refusal_line}
+        elif outcome != AIJob.Outcome.DELIVERED:
+            # needs_clarification / refused: the model's free explanation.
+            explain(result.get("answer") or "Текст не создан")
+            job.result_reference = {"explanation": "saved"}
+        elif not checked.ok:
+            outcome = AIJob.Outcome.NO_CHARGE_FAILURE
+            explain(grounding.VALIDATION_FAILED_MESSAGE)
+            job.error_code = "source_validation_failed"
+            job.result_reference = {"explanation": "saved", "violations": [violation[:300] for violation in checked.violations[:10]]}
+        else:
+            # Owner decision: a non-passed review never discards the text;
+            # the remaining remarks are shown next to the delivered draft.
+            if not review["passed"] and review.get("message_ru"):
+                payload = {**payload, "note": review["message_ru"]}
+            revision = Revision.objects.create(project=job.project, parent=None, payload=payload, created_by_job=job)
+            grounding.save_links(revision, checked)
+            job.project.head_revision = revision
+            job.project.save(update_fields=["head_revision"])
+            job.result_reference = {"revision_id": str(revision.pk)}
+            QualityReport.objects.create(
+                revision=revision,
+                revision_content_hash=revision.content_hash,
+                deterministic_json={"source_check": "passed", "sources": sum(len(sources) for sources in checked.parts)},
+                review_json=review["review"],
+                review_model=attempts[-1]["model"] if attempts else "",
+                prompt_version=getattr(provider, "grounded_review_prompt_version", "fake"),
+                schema_version="review-1",
+                factual_state=review["review"].get("factual_state", "unverified"),
+                eligibility_state="ineligible",
+            )
+        job.result_reference["search"] = retrieval.summary()
+        _save_provider_attempts(job, provider, "completed")
+        settle_reservation(job=job, charge=outcome == AIJob.Outcome.DELIVERED)
+        job.status = AIJob.Status.SUCCEEDED
+        job.outcome = outcome
+        job.stage = "finalize"
+        job.completed_at = timezone.now()
+        job.save()
+    return job
+
+
 def execute_job(job):
     if job.kind == AIJob.Kind.REVIEW:
         return _execute_review_job(job)
@@ -533,7 +777,10 @@ def execute_job(job):
             job.save()
         return job
     provider = get_provider()
-    is_edit = job.kind in (AIJob.Kind.EDIT_SENTENCE, AIJob.Kind.EDIT_PART, AIJob.Kind.EDIT_SERIES)
+    if job.kind == AIJob.Kind.GENERATE:
+        # A text is always an answer with sources; there is no other path.
+        return _execute_generate_job(job, provider)
+    is_edit = job.kind in EDIT_KINDS
     try:
         # Network happens here, strictly outside DB transactions.
         if is_edit:
@@ -594,27 +841,10 @@ def execute_job(job):
             # page shows them next to the delivered draft.
             if review and not review.get("passed") and review.get("message_ru") and payload:
                 payload = {**payload, "note": review["message_ru"]}
+            # An edit only adds a revision: head moves after explicit
+            # "apply" (the first text sets head in _execute_generate_job).
             revision = Revision.objects.create(project=job.project, parent=job.base_revision, payload=payload, created_by_job=job)
-            # Spec: a successful first series sets head automatically; a later
-            # edit only adds a revision — head moves after explicit "apply".
-            if job.kind == AIJob.Kind.GENERATE:
-                job.project.head_revision = revision
-                job.project.save(update_fields=["head_revision"])
             job.result_reference = {"revision_id": str(revision.pk)}
-            if review and job.kind == AIJob.Kind.GENERATE:
-                from .models import QualityReport
-
-                QualityReport.objects.create(
-                    revision=revision,
-                    revision_content_hash=revision.content_hash,
-                    deterministic_json={},
-                    review_json=review.get("review", {}),
-                    review_model=attempts[-1]["model"] if attempts else "",
-                    prompt_version="review-v2",
-                    schema_version="review-1",
-                    factual_state=review.get("review", {}).get("factual_state", "unverified"),
-                    eligibility_state="ineligible",
-                )
         if attempts:
             from .models import ProviderAttempt
 
@@ -628,7 +858,7 @@ def execute_job(job):
                     model=attempt["model"],
                     provider="openrouter",
                     usage_json=attempt["usage_json"],
-                    cost_usd=result.get("cost_usd") if stage_number == 1 else None,
+                    cost_usd=attempt.get("cost_usd") if attempt.get("cost_usd") is not None else (result.get("cost_usd") if stage_number == 1 else None),
                     sent_at=timezone.now(),
                     completed_at=timezone.now(),
                 )

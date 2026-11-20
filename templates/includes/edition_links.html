@@ -1,0 +1,2 @@
+{# Links next to an attribution line: the digital text and its licence. `links` is a list of href, en, ru. #}
+{% if links %}<span class="edition-links">{% for link in links %}<a href="{{ link.href }}" rel="noopener" lang="en">{{ link.en }}<span class="ru-ui" lang="ru">{{ link.ru }}</span></a>{% endfor %}</span>{% endif %}

@@ -220,11 +220,15 @@
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return; // Keep the first example only; the form stays fully usable.
     }
+    // The field named by the group shows the same example as its placeholder.
+    var field = doc.getElementById(group.getAttribute('data-topic-examples') || '');
     var current = 0;
     function showNext() {
       items[current].hidden = true;
       current = (current + 1) % items.length;
       items[current].hidden = false;
+      var example = items[current].getAttribute('data-example');
+      if (field && example) { field.placeholder = example; }
     }
     window.setInterval(showNext, 4000);
   }

@@ -5,7 +5,7 @@
   <div class="wrap">
     <p class="kicker">Мастерская</p>
     <h1>Новый проект</h1>
-    <p class="page-head__lead">Назовите тему или вопрос. Мастерская подготовит серию коротких частей на простом английском с переводом каждого предложения.</p>
+    <p class="page-head__lead">Задайте вопрос о книге с нашей полки. Мастерская ответит коротким текстом на простом английском с переводом каждого предложения; под каждой частью будет место в книге и отрывок из неё.</p>
   </div>
   {% include 'includes/fork.html' %}
 </header>
@@ -17,25 +17,33 @@
         {% if error == 'Недостаточно кредитов для этого действия' %}<p><a href="{% url 'account:credits' %}">Добавить
                 кредиты</a> · <a href="{% url 'library:home' %}">Продолжить чтение</a></p>{% endif %}
         {% endif %}
+        {# The shelf is data: one line per book that is READY and not replaced. With an empty shelf there is nothing to ask about, so there is no form. #}
+        {% if shelf_books %}
         <form method="post" class="workshop-form">{% csrf_token %}
             <input type="hidden" name="mode" value="explain_topic">
-            <label for="topic">О какой философской идее вы хотите прочитать?</label>
-            <textarea id="topic" name="topic" maxlength="2000" required rows="4" placeholder="{{ placeholder_examples.0 }}">{{ topic }}</textarea>
-            {# Examples of what to type are presentation, not data: the first one also serves as the static no-JS placeholder. #}
-            <p class="workshop-examples meta" data-topic-examples>
-              {% for example in placeholder_examples %}<span lang="en"{% if not forloop.first %} hidden{% endif %}>For example: {{ example }}.</span>{% endfor %}
+            <p class="shelf-ask" lang="en">Ask about a book on our shelf.<span class="ru-ui" lang="ru">Спросите о книге с нашей полки.</span></p>
+            <ul class="shelf-list">
+              {% for book in shelf_books %}
+              <li class="meta" lang="en" data-shelf-book>On the shelf: {{ book.attribution }} {% include 'includes/edition_links.html' with links=book.links %}<span class="ru-ui" lang="ru">На полке: {% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></li>
+              {% endfor %}
+            </ul>
+            <label for="topic">Ваш вопрос о книге</label>
+            <textarea id="topic" name="topic" maxlength="{{ max_question_chars }}" required rows="4" placeholder="{{ placeholder_examples.0 }}" aria-describedby="topic-help">{{ topic }}</textarea>
+            {# Examples of a question are presentation, not data: the first one is also the static placeholder; with JS the line and the placeholder change together. #}
+            <p class="workshop-examples meta" data-topic-examples="topic">
+              {% for example in placeholder_examples %}<span data-example="{{ example }}"{% if not forloop.first %} hidden{% endif %}>Например: {{ example }}</span>{% endfor %}
             </p>
-            {# The shelf is data: one line per book that is READY and not replaced; nothing when the shelf is empty. #}
-            {% for book in shelf_books %}
-            <p class="workshop-examples meta" lang="en" data-shelf-book>On the shelf: {{ book.attribution }}<span class="ru-ui" lang="ru">На полке: {% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></p>
-            {% endfor %}
+            <p class="meta" id="topic-help">По-русски или по-английски, до {{ max_question_chars }} символов.</p>
             <button type="submit">Создать текст</button>
         </form>
+        {% else %}
+        <p class="shelf-empty" lang="en">There are no books on our shelf yet.<span class="ru-ui" lang="ru">На полке пока нет книг: задать вопрос о книге сейчас нельзя.</span></p>
+        {% endif %}
         <div class="prose workshop-terms">
             <ul>
-                <li>Создание серии — <strong>{{ costs.generate }}</strong> кредитов.</li>
-                <li>Правка предложения — <strong>{{ costs.edit_sentence }}</strong>, правка части — <strong>{{ costs.edit_part }}</strong>.</li>
-                <li>Любое предложение или часть потом можно поправить.</li>
+                <li>Ответ с источниками — <strong>{{ costs.generate }}</strong> кредитов.</li>
+                <li>Если на полке нет опоры для вопроса, текст не создаётся и кредиты не списываются.</li>
+                <li>Править ответ с источниками пока нельзя: можно задать новый вопрос.</li>
             </ul>
             <p><a class="tap" href="{% url 'library:credits_help' %}">Как работают кредиты</a></p>
             <p class="meta">Загрузка собственных файлов (TXT, MD, PDF) в интерфейсе пока недоступна. Секретные документы загружать нельзя.</p>

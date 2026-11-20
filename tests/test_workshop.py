@@ -18,6 +18,8 @@ from apps.ai.services import (
 from apps.credits.models import Wallet, grant_welcome_credits
 from apps.workshop.models import Project, Revision
 
+from .helpers import put_book_on_shelf, shelf_search
+
 BASE_PAYLOAD = {
     "title_en": "A short series",
     "title_ru": "Короткая серия",
@@ -146,8 +148,11 @@ class EditScopeTests(TestCase):
         self.assertEqual(result["payload"], {})
 
 
+@shelf_search()
 class EditJobFlowTests(TestCase):
     def setUp(self):
+        # `generate` answers from the shelf (PR 3): the book and the search are there.
+        put_book_on_shelf()
         self.user = User.objects.create_user(login="editflow", password="TestPassword123!")
         grant_welcome_credits(self.user)
         self.project = Project.objects.create(owner=self.user, title="P", mode=Project.Mode.EXPLAIN)
@@ -322,6 +327,7 @@ class ApplyHeadTests(TestCase):
         transaction (500 instead of a clean 402)."""
         # Ledger rows are PROTECT'ed; empty the balance instead of deleting.
         Wallet.objects.filter(user=self.user).update(total_credits=0, reserved_credits=0)
+        put_book_on_shelf()  # with an empty shelf the question is refused before the wallet is looked at
         url = reverse("workshop:create_project")
         response = self.client.post(url, {"mode": "explain_topic", "topic": "Stoic acceptance"})
         self.assertEqual(response.status_code, 402)

@@ -10,11 +10,30 @@ import re
 _SPACE = re.compile(r"\s+")
 
 
-def _reference(locator: dict, first: str, last: str) -> str:
+def _place(locator: dict, first: str, last: str) -> str:
     pages = first if first == last else f"{first}–{last}"
     book = locator.get("book")
-    place = f"{book}.{pages}" if book else pages
-    return f"{locator.get('work', '')} {place}".strip()
+    return f"{book}.{pages}" if book else pages
+
+
+def _reference(locator: dict, first: str, last: str) -> str:
+    return f"{locator.get('work', '')} {_place(locator, first, last)}".strip()
+
+
+def format_place(locator: dict) -> str:
+    """`1.1252b–1253a`: the place of a whole chunk without the work's name."""
+    if not locator or not locator.get("bekker_start"):
+        return ""
+    return _place(locator, locator["bekker_start"], locator.get("bekker_end") or locator["bekker_start"])
+
+
+def span_place(locator: dict, start: int, end: int) -> str:
+    """`1.1253a` for the characters [start, end) of a chunk text: the place
+    without the work's name (`1.1252b–1253a` across a page turn). Empty
+    string if the chunk has no page marks."""
+    if not locator or not locator.get("segments") or end <= start:
+        return ""
+    return _place(locator, page_at(locator, start), page_at(locator, end - 1))
 
 
 def format_locator(locator: dict) -> str:

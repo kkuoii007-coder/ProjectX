@@ -15,10 +15,14 @@
     {% if revision %}
     <article class="workshop-reading">
       {% if revision.payload.note %}<p class="warning">{{ revision.payload.note }}</p>{% endif %}
+      {# Books come from the stored revision, not from the shelf of today. #}
+      {% if revision.payload.based_on %}<p class="draft-mark" lang="en">AI draft. Based on: {{ revision.payload.based_on|join:"; " }}.<span class="ru-ui" lang="ru">Черновик ИИ. Опирается на: {% for edition in source_editions %}{% if edition.book_ru %}{{ edition.book_ru }}{% else %}{{ edition.book }}{% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}.</span></p>{% endif %}
       <h2>{{ revision.payload.title_ru }}</h2>
       {% for part in parts %}
       <section class="section-gap-small">
         <h3 lang="en">{{ part.title_en }}</h3>
+        {# An answer with sources cannot be edited yet: no edit forms, and the server refuses the job. #}
+        {% if not sourced %}
         <details class="workshop-edit">
           <summary>Изменить часть</summary>
           <form method="post" action="{% url 'workshop:edit_fragment' project.pk %}" class="inline edit-part-form">
@@ -31,10 +35,12 @@
             <button type="submit" class="btn btn--small">Изменить часть</button>
           </form>
         </details>
+        {% endif %}
         {% for s in part.sentences %}
         <div class="workshop-sentence">
           <span class="s" lang="en" data-gloss="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.en }}</span>
           <span class="gloss" role="note" lang="ru" id="ru-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}">{{ s.ru }}</span>
+          {% if not sourced %}
           <details class="workshop-edit">
             <summary>Изменить предложение</summary>
             <form method="post" action="{% url 'workshop:edit_fragment' project.pk %}" class="inline edit-sentence">
@@ -47,17 +53,59 @@
               <button type="submit" class="btn btn--small">Изменить</button>
             </form>
           </details>
+          {% endif %}
         </div>
         {% endfor %}
+        {# One line per source of the part. A native details element: opens from the keyboard and without JavaScript. #}
+        {% if part.sources %}
+        <div class="sources">
+          {% for source in part.sources %}
+          <details class="source">
+            <summary><span lang="en">Source: {{ source.label }}</span><span class="ru-ui" lang="ru">Источник</span></summary>
+            <blockquote class="source__excerpt" lang="en">{{ source.excerpt }}</blockquote>
+            {% if source.attribution %}<p class="source__attribution" lang="en">{{ source.attribution }} {% include 'includes/edition_links.html' with links=source.links %}</p>{% endif %}
+          </details>
+          {% endfor %}
+        </div>
+        {% endif %}
       </section>
       {% endfor %}
     </article>
-    {% else %}
+    {% elif state == 'no_source' %}
+    <section class="refusal" aria-labelledby="refusal-title">
+      <h2 class="refusal__title" id="refusal-title" lang="en">We have no source for this yet.<span class="ru-ui" lang="ru">У нас пока нет источника для этого вопроса.</span></h2>
+      <p class="refusal__line" lang="en">No credits were taken.<span class="ru-ui" lang="ru">Кредиты не списаны.</span></p>
+      {% if shelf_books %}
+      <p class="refusal__line" lang="en">You can ask about a book on our shelf:<span class="ru-ui" lang="ru">Можно спросить о книге с нашей полки:</span></p>
+      <ul class="shelf-list">
+        {% for book in shelf_books %}
+        <li class="meta" lang="en" data-shelf-book>{{ book.attribution }} {% include 'includes/edition_links.html' with links=book.links %}<span class="ru-ui" lang="ru">{% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <p class="refusal__next"><a class="btn" href="{% url 'workshop:create_project' %}" lang="en">Ask another question</a><span class="ru-ui" lang="ru">Задать другой вопрос</span></p>
+    </section>
+    {% elif state == 'search_unavailable' %}
+    <section class="refusal" aria-labelledby="refusal-title">
+      <h2 class="refusal__title" id="refusal-title" lang="en">Search is not available now. Try again later.<span class="ru-ui" lang="ru">Поиск по книгам сейчас недоступен. Попробуйте позже.</span></h2>
+      <p class="refusal__line" lang="en">No credits were taken.<span class="ru-ui" lang="ru">Кредиты не списаны.</span></p>
+      <p class="refusal__next"><a class="btn" href="{% url 'workshop:create_project' %}" lang="en">Ask again</a><span class="ru-ui" lang="ru">Задать вопрос ещё раз</span></p>
+    </section>
+    {% elif state == 'waiting' %}
     <p class="workshop-empty" aria-live="polite">Текст ещё не создан. Проверьте статус задачи в кабинете.</p>
+    {% else %}
+    <section class="refusal" aria-labelledby="refusal-title">
+      <h2 class="refusal__title" id="refusal-title" lang="en">The text was not made.<span class="ru-ui" lang="ru">Текст не создан.</span></h2>
+      {% if explanation %}<p class="refusal__line" lang="ru">{{ explanation.body }}</p>{% endif %}
+      <p class="refusal__line" lang="en">No credits were taken.<span class="ru-ui" lang="ru">Кредиты не списаны.</span></p>
+      <p class="refusal__next"><a class="btn" href="{% url 'workshop:create_project' %}" lang="en">Ask another question</a><span class="ru-ui" lang="ru">Задать другой вопрос</span></p>
+    </section>
     {% endif %}
   </div>
 </section>
 
+{# A final screen without a text has no versions and no discussion. #}
+{% if state == 'text' or state == 'waiting' or not state %}
 <div class="wrap">
   <section class="section-gap">
     <h2 class="section-title">Версии</h2>
@@ -119,4 +167,5 @@
     {% endif %}
   </section>
 </div>
+{% endif %}
 {% endblock %}
