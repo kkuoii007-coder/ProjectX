@@ -1,19 +1,33 @@
 #!/usr/bin/env node
 /* Browser check of the fork in the reader: steps, assertions, screenshots.
-   An acceptance tool. It is not part of the test suite and never runs in CI.
+   Chromium through Playwright. It runs in the `browser` job of
+   .github/workflows/tests.yml on every pull request, and by hand as an
+   acceptance tool.
 
-   How to run (a local server with two published texts with forks):
+   How to run by hand (a throw-away database, never a server):
 
-     node tools/qa/fork_steps.js \
-       --base=http://127.0.0.1:8011 \
-       --text=/read/what-does-it-mean-to-be-brave/ \
-       --other=/read/why-do-people-live-in-cities/
+     export PR_BROWSER_CHECK=1          # tools/qa/seed_browser_check.py asks for it
+     python manage.py migrate
+     python tools/qa/seed_browser_check.py --olive-copy
+     python manage.py runserver 127.0.0.1:8011 --noreload --nothreading
+     node tools/qa/fork_steps.js --no-shots \
+       --login=browser-check-reader:browser-check-only \
+       --tones=clay:/read/what-does-it-mean-to-be-brave/,sea:/read/why-do-people-live-in-cities/,olive:/read/browser-check-olive/ \
+       --revised=/read/browser-check-olive/ \
+       --republish="python tools/qa/seed_browser_check.py --new-revision"
 
-   Playwright is not a dependency of the project. The script takes it from
-   PLAYWRIGHT_PATH, from `playwright` on the usual Node path or from
-   /home/user/node_modules/playwright (Chromium only).
+   (--nothreading: the development server then holds one database connection;
+   with threads and CONN_MAX_AGE it leaves one behind for every browser tab.)
+
+   Playwright is not a dependency of the project: no package.json here. The
+   script takes it from PLAYWRIGHT_PATH (the workflow installs it outside the
+   checkout), from `playwright` on the usual Node path or from
+   /home/user/node_modules/playwright.
 
    Options:
+     --base=http://127.0.0.1:8011
+     --text=/read/a/     the text the steps are walked on (three forks)
+     --other=/read/b/    another text with forks
      --tones=clay:/read/a/,sea:/read/b/,olive:/read/c/
                          texts for the hint contrast (step 8); without it the
                          tone of --text and of --other is measured
@@ -28,14 +42,18 @@
      --no-shots          assertions only
 
    Steps (each at 390 and 1440 px):
-     0 first open              6 new revision: closed again
-     1 after answer 1          7 link to #part-3 on a clean profile
-     2 after answer 2          8 hint close-up and contrast on each tone
-     3 after answer 3: the end 9 without JavaScript
-     4 reload                  10 print (with JavaScript on)
-     5 the other text: closed  11 edge cases, no screenshots
+     0 first open               8 hint close-up and contrast on each tone
+     1 after answer 1           9 without JavaScript
+     2 after answer 2          10 print (with JavaScript on)
+     3 after answer 3: the end 11 edge cases
+     4 reload                  12 the same text in two tabs
+     5 the other text: closed  13 a page kept for the "back" button
+     6 new revision: closed    14 the script comes late
+     7 link to #part-3         15 the script fails half-way
+   Steps 11-15 take no screenshots.
 
-   Exit code: 0 when every assertion holds, 1 otherwise.
+   A step that cannot go on is one failed check; the run goes on.
+   Exit code: 0 when every check holds, 1 otherwise.
 
    The files in docs/screenshots/pr1-fork were taken by this script in two
    runs (steps 0-5, 7, 9-11 with two texts published; then steps 6 and 8 with
@@ -73,10 +91,18 @@ const STEPS = args.steps ? String(args.steps).split(',').map(Number) : null;
 const VIEWPORTS = [{ width: 390, height: 844 }, { width: 1440, height: 900 }];
 const TONES = { clay: '#8a3a26', sea: '#1f4d5c', olive: '#4a5626' };
 const KEYS = ['yes', 'no', 'not_sure'];
+const TIMEOUT = 5000; // ms to wait for anything on a page
+const LATE = 5000; // ms the script is held back in step 14; the page waits 3000 for it
 
 const wanted = (step) => !STEPS || STEPS.indexOf(step) >= 0;
 let failed = 0;
 let passed = 0;
+let skipped = 0;
+
+function skip(label) {
+  skipped += 1;
+  console.log('  skip  ' + label);
+}
 
 function check(label, ok, detail) {
   if (ok) { passed += 1; console.log('  ok    ' + label); return; }
@@ -85,6 +111,30 @@ function check(label, ok, detail) {
 }
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/* A step that cannot go on (a button that never comes, a broken page) is a
+   failed check with its reason, and the run goes on to the next step. */
+async function step(tag, number, title, body) {
+  if (!wanted(number)) { return; }
+  console.log('\n' + tag + 'step ' + title);
+  try {
+    await body();
+  } catch (error) {
+    check(tag + 'step ' + title + ': ran to its end', false, String(error && error.message ? error.message : error).split('\n').slice(0, 3).join(' | '));
+  }
+}
+
+async function newContext(browser, options) {
+  const context = await browser.newContext(options);
+  context.setDefaultTimeout(TIMEOUT);
+  context.setDefaultNavigationTimeout(3 * TIMEOUT);
+  return context;
+}
+
+/* The place kept for the text of this view, or null. */
+function kept(view) {
+  try { return JSON.parse(view.storage['pr-fork:' + view.scope] || 'null'); } catch (error) { return null; }
+}
 
 /* What the reader sees: taken from layout, not from classes. */
 function look(page) {
@@ -228,13 +278,12 @@ async function main() {
   for (const viewport of VIEWPORTS) {
     const w = viewport.width;
     const tag = '[' + w + '] ';
-    const context = await browser.newContext({ viewport: viewport });
+    const context = await newContext(browser, { viewport: viewport });
     const page = await context.newPage();
     watch(page, errors);
     const requests = [];
 
-    if (wanted(0)) {
-      console.log('\n' + tag + 'step 0: first open');
+    await step(tag, 0, '0: first open', async () => {
       await open(page, TEXT);
       const view = await look(page);
       expectView(tag + '0', view, CLOSED);
@@ -242,31 +291,28 @@ async function main() {
       check(tag + '0: scope names the text and a revision', new RegExp('^' + TEXT.replace(/^\/read\/|\/$/g, '') + ':[0-9a-f]{16}$').test(view.scope || ''), view.scope);
       check(tag + '0: no sideways scroll', view.overflow <= 0, view.overflow);
       await shot(page, w + '-00-first-open');
-    }
+    });
 
-    if (wanted(1)) {
-      console.log('\n' + tag + 'step 1: after answer 1');
+    await step(tag, 1, '1: after answer 1', async () => {
       if (!wanted(0)) { await open(page, TEXT); }
       page.on('request', (request) => requests.push(request.method() + ' ' + request.url()));
       await answer(page, 1, 'yes');
       const view = await look(page);
       expectView(tag + '1', view, { parts: [1, 2], forks: [1, 2], hints: [2], readOn: [1], lines: [['yes'], [], []], pressed: [['yes'], [], []], labels: 0, words: true, about: false, next: false, closedByDisplay: true });
       check(tag + '1: focus is on the line of the answer', view.focus === 'fork-1-yes-line', view.focus);
-      check(tag + '1: the answer is kept under the scope of this text', same(JSON.parse(view.storage['pr-fork:' + view.scope] || 'null'), { answers: { 1: 'yes' }, upto: 2 }), view.storage);
+      check(tag + '1: the answer is kept under the scope of this text', same(kept(view), { answers: { 1: 'yes' }, upto: 2 }), view.storage);
       await shot(page, w + '-01-after-answer-1');
-    }
+    });
 
-    if (wanted(2)) {
-      console.log('\n' + tag + 'step 2: after answer 2');
+    await step(tag, 2, '2: after answer 2', async () => {
       await answer(page, 2, 'no');
       const view = await look(page);
       expectView(tag + '2', view, { parts: [1, 2, 3], forks: [1, 2, 3], hints: [3], readOn: [1, 2], lines: [['yes'], ['no'], []], pressed: [['yes'], ['no'], []], words: true, about: false, next: false, closedByDisplay: true });
       check(tag + '2: focus is on the line of the answer', view.focus === 'fork-2-no-line', view.focus);
       await shot(page, w + '-02-after-answer-2');
-    }
+    });
 
-    if (wanted(3)) {
-      console.log('\n' + tag + 'step 3: after answer 3, the end of the text');
+    await step(tag, 3, '3: after answer 3, the end of the text', async () => {
       // The third answer is given from the keyboard: the buttons are real buttons.
       await page.locator('[data-fork]').nth(2).locator('[data-fork-key="not_sure"]').focus();
       await page.keyboard.press('Space');
@@ -282,18 +328,16 @@ async function main() {
       const changed = await look(page);
       expectView(tag + '3 (answer 1 changed)', changed, Object.assign({}, OPEN_ALL, { lines: [['no'], ['no'], ['not_sure']], pressed: [['no'], ['no'], ['not_sure']] }));
       await answer(page, 1, 'yes');
-    }
+    });
 
-    if (wanted(4)) {
-      console.log('\n' + tag + 'step 4: reload');
+    await step(tag, 4, '4: reload', async () => {
       await page.reload({ waitUntil: 'load' });
       const view = await look(page);
       expectView(tag + '4', view, Object.assign({}, OPEN_ALL, { readOn: [1, 2, 3], lines: [['yes'], ['no'], ['not_sure']], pressed: [['yes'], ['no'], ['not_sure']] }));
       await shot(page, w + '-04-after-reload');
-    }
+    });
 
-    if (wanted(5)) {
-      console.log('\n' + tag + 'step 5: the other text, first open after the first one is read');
+    await step(tag, 5, '5: the other text, first open after the first one is read', async () => {
       const before = await look(page);
       await open(page, OTHER);
       const view = await look(page);
@@ -303,11 +347,10 @@ async function main() {
       await shot(page, w + '-05-second-text-first-open');
       await open(page, TEXT);
       expectView(tag + '5 (back to the first text)', await look(page), OPEN_ALL);
-    }
+    });
 
-    if (wanted(6)) {
-      console.log('\n' + tag + 'step 6a: a kept place of another revision of this text (planted)');
-      const fresh = await browser.newContext({ viewport: viewport });
+    await step(tag, 6, '6a: a kept place of another revision of this text (planted)', async () => {
+      const fresh = await newContext(browser, { viewport: viewport });
       const tab = await fresh.newPage();
       watch(tab, errors);
       await open(tab, TEXT);
@@ -324,11 +367,10 @@ async function main() {
       check(tag + '6a: the old revision and the old shared key are removed, the rest stays', same(Object.keys(view.storage).sort(), ['pr-fork:another-text:0000000000000000', 'pr-ui-ru']), Object.keys(view.storage));
       if (!args.republish) { await shot(tab, w + '-06-new-revision-first-open'); }
       await fresh.close();
-    }
+    });
 
-    if (wanted(7)) {
-      console.log('\n' + tag + 'step 7: a link to #part-3 on a clean profile');
-      const fresh = await browser.newContext({ viewport: viewport });
+    await step(tag, 7, '7: a link to #part-3 on a clean profile', async () => {
+      const fresh = await newContext(browser, { viewport: viewport });
       const tab = await fresh.newPage();
       watch(tab, errors);
       await open(tab, TEXT + '#part-3');
@@ -337,7 +379,7 @@ async function main() {
       expectView(tag + '7', view, { parts: [1, 2, 3], forks: [1, 2, 3], hints: [3], readOn: [1, 2], lines: [[], [], []], pressed: [[], [], []], words: true, about: false, next: false, closedByDisplay: true });
       check(tag + '7: the page is scrolled to part 3', top >= 0 && top <= 40 && view.scrollY > 0, { top: top, scrollY: view.scrollY });
       check(tag + '7: focus is on part 3', view.focus === 'part-3', view.focus);
-      check(tag + '7: the link gave no answers', same(JSON.parse(view.storage['pr-fork:' + view.scope]), { answers: {}, upto: 3 }), view.storage);
+      check(tag + '7: the link gave no answers', same(kept(view), { answers: {}, upto: 3 }), view.storage);
       await shot(tab, w + '-07-link-to-part-3', { fullPage: false });
       await shot(tab, w + '-07-link-to-part-3-whole-page');
 
@@ -346,7 +388,7 @@ async function main() {
       await answer(tab, 1, 'no');
       expectView(tag + '7 (an answer at a passed fork)', await look(tab), { parts: [1, 2, 3], hints: [3], lines: [['no'], [], []], about: false });
 
-      const clean = await browser.newContext({ viewport: viewport });
+      const clean = await newContext(browser, { viewport: viewport });
       const other = await clean.newPage();
       watch(other, errors);
       await open(other, TEXT);
@@ -365,11 +407,10 @@ async function main() {
       expectView(tag + '7 (links back and to nowhere close nothing)', await look(other), OPEN_ALL);
       await clean.close();
       await fresh.close();
-    }
+    });
 
-    if (wanted(9)) {
-      console.log('\n' + tag + 'step 9: without JavaScript');
-      const plain = await browser.newContext({ viewport: viewport, javaScriptEnabled: false });
+    await step(tag, 9, '9: without JavaScript', async () => {
+      const plain = await newContext(browser, { viewport: viewport, javaScriptEnabled: false });
       const tab = await plain.newPage();
       await tab.goto(BASE + TEXT, { waitUntil: 'load' });
       const view = await look(tab); // the probe runs through the debugger; the page's own scripts are off
@@ -379,17 +420,16 @@ async function main() {
       await plain.close();
 
       // The script file does not arrive: the inline script gives the page back.
-      const broken = await browser.newContext({ viewport: viewport });
+      const broken = await newContext(browser, { viewport: viewport });
       const lost = await broken.newPage();
       await lost.route('**/reader*.js', (route) => route.abort());
       await lost.goto(BASE + TEXT, { waitUntil: 'load' });
       expectView(tag + '9 (reader.js failed to load)', await look(lost), { parts: [1, 2, 3, 4], forks: [1, 2, 3], buttons: [], lines: [KEYS, KEYS, KEYS], about: true, next: true });
       await broken.close();
-    }
+    });
 
-    if (wanted(10)) {
-      console.log('\n' + tag + 'step 10: print, JavaScript on, the text closed on screen');
-      const fresh = await browser.newContext({ viewport: viewport });
+    await step(tag, 10, '10: print, JavaScript on, the text closed on screen', async () => {
+      const fresh = await newContext(browser, { viewport: viewport });
       const tab = await fresh.newPage();
       watch(tab, errors);
       await open(tab, TEXT);
@@ -402,12 +442,11 @@ async function main() {
       await tab.emulateMedia({ media: 'screen' });
       expectView(tag + '10 back on screen', await look(tab), { parts: [1, 2], about: false });
       await fresh.close();
-    }
+    });
 
-    if (wanted(11)) {
-      console.log('\n' + tag + 'step 11: edge cases');
+    await step(tag, 11, '11: edge cases', async () => {
       // Broken or foreign data under the key of this text.
-      const fresh = await browser.newContext({ viewport: viewport });
+      const fresh = await newContext(browser, { viewport: viewport });
       const tab = await fresh.newPage();
       watch(tab, errors);
       await open(tab, TEXT);
@@ -427,7 +466,7 @@ async function main() {
       await fresh.close();
 
       // No localStorage at all: the place is kept for the life of the page.
-      const sealed = await browser.newContext({ viewport: viewport });
+      const sealed = await newContext(browser, { viewport: viewport });
       await sealed.addInitScript(() => {
         Object.defineProperty(window, 'localStorage', { get: function () { throw new DOMException('denied', 'SecurityError'); } });
       });
@@ -444,7 +483,7 @@ async function main() {
       await sealed.close();
 
       // A narrow phone: nothing runs off the side, closed or open.
-      const narrow = await browser.newContext({ viewport: { width: 320, height: 640 } });
+      const narrow = await newContext(browser, { viewport: { width: 320, height: 640 } });
       const small = await narrow.newPage();
       watch(small, errors);
       await open(small, TEXT);
@@ -456,7 +495,7 @@ async function main() {
 
       if (args.login) {
         const pair = String(args.login).split(':');
-        const signed = await browser.newContext({ viewport: viewport });
+        const signed = await newContext(browser, { viewport: viewport });
         const member = await signed.newPage();
         watch(member, errors);
         await member.goto(BASE + '/accounts/login/');
@@ -468,18 +507,234 @@ async function main() {
         expectView(tag + '11 a signed-in reader, first open', view, Object.assign({}, CLOSED, { tools: true }));
         await signed.close();
       } else {
-        console.log('  skip  ' + tag + '11 a signed-in reader: no --login');
+        skip(tag + '11 a signed-in reader: no --login');
       }
-    }
+    });
+
+    // A page that hears nothing of what another page writes: the browser sends
+    // no "storage" event to a page it has put aside, and may be late with it.
+    const deaf = async (context) => {
+      const tab = await context.newPage();
+      await tab.addInitScript(() => { window.addEventListener('storage', (event) => event.stopImmediatePropagation(), true); });
+      watch(tab, errors);
+      return tab;
+    };
+    const readToTheEnd = async (tab) => {
+      await answer(tab, 1, 'yes');
+      await answer(tab, 2, 'no');
+      await answer(tab, 3, 'not_sure');
+    };
+    const READ = { answers: { 1: 'yes', 2: 'no', 3: 'not_sure' }, upto: 4 };
+    const READ_VIEW = Object.assign({}, OPEN_ALL, { lines: [['yes'], ['no'], ['not_sure']], pressed: [['yes'], ['no'], ['not_sure']] });
+    const CHANGED_VIEW = Object.assign({}, OPEN_ALL, { lines: [['no'], ['no'], ['not_sure']], pressed: [['no'], ['no'], ['not_sure']] });
+    const followed = (tab, parts) => tab.waitForFunction((n) => document.querySelectorAll('.part.is-reached').length === n, parts).catch(() => null);
+
+    await step(tag, 12, '12: the same text in two tabs', async () => {
+      // Two tabs side by side: the first follows what is done in the second.
+      const shared = await newContext(browser, { viewport: viewport });
+      const one = await shared.newPage();
+      const two = await shared.newPage();
+      watch(one, errors);
+      watch(two, errors);
+      await open(one, TEXT);
+      await open(two, TEXT);
+      const before = await look(one);
+      await readToTheEnd(two);
+      await followed(one, 4);
+      const after = await look(one);
+      expectView(tag + '12 the first tab follows the second', after, READ_VIEW);
+      check(tag + '12 following moves neither the page nor the focus', after.scrollY === before.scrollY && after.focus === before.focus, [before.scrollY, after.scrollY, before.focus, after.focus]);
+      check(tag + '12 following writes nothing', same(kept(after), READ), after.storage);
+      await answer(one, 1, 'no');
+      await two.waitForFunction(() => !!document.querySelector('#fork-1-no-line.is-chosen')).catch(() => null);
+      expectView(tag + '12 an answer changed in the first tab shows in the second', await look(two), CHANGED_VIEW);
+      await shared.close();
+
+      // The first tab has missed it all and is still closed. An answer there
+      // must not throw away what the second tab has kept.
+      const apart = await newContext(browser, { viewport: viewport });
+      const stale = await deaf(apart);
+      const other = await apart.newPage();
+      watch(other, errors);
+      await open(stale, TEXT);
+      await open(other, TEXT);
+      await readToTheEnd(other);
+      expectView(tag + '12 a tab that missed the news is still closed', await look(stale), { parts: [1], forks: [1] });
+      await answer(stale, 1, 'no');
+      const merged = await look(stale);
+      expectView(tag + '12 an answer in that tab: it catches up, nothing closes', merged, CHANGED_VIEW);
+      check(tag + '12 the kept place: the new answer on top of the kept ones', same(kept(merged), { answers: { 1: 'no', 2: 'no', 3: 'not_sure' }, upto: 4 }), merged.storage);
+      await other.reload({ waitUntil: 'load' });
+      expectView(tag + '12 the second tab after a reload', await look(other), CHANGED_VIEW);
+      await apart.close();
+
+      // The same with a link to a part instead of an answer.
+      const linked = await newContext(browser, { viewport: viewport });
+      const behind = await deaf(linked);
+      const ahead = await linked.newPage();
+      watch(ahead, errors);
+      await open(behind, TEXT);
+      await open(ahead, TEXT);
+      await readToTheEnd(ahead);
+      await behind.evaluate(() => { window.location.hash = '#part-2'; });
+      await settledTop(behind, '#part-2');
+      const jumped = await look(behind);
+      expectView(tag + '12 a link to #part-2 in a tab that missed the news: it catches up', jumped, READ_VIEW);
+      check(tag + '12 the link took nothing from the kept place', same(kept(jumped), READ), jumped.storage);
+      await linked.close();
+
+      // What is kept can be behind this page (a write that failed, a place
+      // put there by hand). The page takes the kept answer and closes nothing.
+      // It was opened by a link, so no answer of its own holds its parts open.
+      const ahead2 = await newContext(browser, { viewport: viewport });
+      const read = await ahead2.newPage();
+      const elsewhere = await ahead2.newPage();
+      watch(read, errors);
+      await open(read, TEXT + '#part-4');
+      await elsewhere.goto(BASE + '/library/', { waitUntil: 'load' });
+      await elsewhere.evaluate((name) => localStorage.setItem(name, '{"answers":{"1":"no"},"upto":2}'), 'pr-fork:' + (await look(read)).scope);
+      await read.waitForFunction(() => !!document.querySelector('#fork-1-no-line.is-chosen')).catch(() => null);
+      expectView(tag + '12 a kept place that is behind closes nothing here', await look(read), Object.assign({}, OPEN_ALL, { lines: [['no'], [], []], pressed: [['no'], [], []] }));
+      await answer(read, 2, 'yes');
+      const whole = await look(read);
+      check(tag + '12 the next answer keeps the whole place again', same(kept(whole), { answers: { 1: 'no', 2: 'yes' }, upto: 4 }), whole.storage);
+      await ahead2.close();
+    });
+
+    await step(tag, 13, '13: a page the browser kept for the "back" button', async () => {
+      // The event the browser sends when it shows a kept page again.
+      const apart = await newContext(browser, { viewport: viewport });
+      const stale = await deaf(apart);
+      const other = await apart.newPage();
+      watch(other, errors);
+      await open(stale, TEXT);
+      await open(other, TEXT);
+      await readToTheEnd(other);
+      await stale.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })));
+      expectView(tag + '13 before it is shown again the page is behind', await look(stale), { parts: [1], forks: [1] });
+      await stale.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+      const shown = await look(stale);
+      expectView(tag + '13 shown again (pageshow, persisted): it catches up', shown, READ_VIEW);
+      check(tag + '13 catching up writes nothing', same(kept(shown), READ), shown.storage);
+      await apart.close();
+
+      // The real thing: closed text -> Library -> the same text read to the
+      // end -> "back" twice. Playwright starts Chromium with this cache off
+      // (a kept page fires no "load"), so this part has a browser of its own.
+      const keeping = await loadPlaywright().chromium.launch({ ignoreDefaultArgs: ['--disable-back-forward-cache'] });
+      try {
+        const context = await newContext(keeping, { viewport: viewport });
+        const tab = await context.newPage();
+        watch(tab, errors);
+        await tab.addInitScript(() => { window.addEventListener('pageshow', (event) => { window.shownFromCache = event.persisted; }); });
+        await open(tab, TEXT);
+        expectView(tag + '13 (real) the text is closed', await look(tab), { parts: [1], forks: [1] });
+        await tab.locator('.site-footer a[href="/library/"]').click();
+        await tab.waitForURL('**/library/');
+        await open(tab, TEXT);
+        await readToTheEnd(tab);
+        for (const address of ['**/library/', '**' + TEXT]) {
+          await tab.goBack({ waitUntil: 'commit' });
+          await tab.waitForURL(address, { waitUntil: 'commit' });
+        }
+        await tab.waitForFunction(() => typeof window.shownFromCache === 'boolean');
+        if (await tab.evaluate(() => window.shownFromCache)) {
+          const back = await look(tab);
+          expectView(tag + '13 (real) the kept page, shown again, has caught up', back, READ_VIEW);
+          await answer(tab, 1, 'no');
+          check(tag + '13 (real) an answer on the kept page keeps the rest', same(kept(await look(tab)), { answers: { 1: 'no', 2: 'no', 3: 'not_sure' }, upto: 4 }), (await look(tab)).storage);
+        } else {
+          skip(tag + '13 (real): this browser loaded the page again instead of keeping it');
+        }
+      } finally {
+        await keeping.close();
+      }
+    });
+
+    await step(tag, 14, '14: the script comes late, after the page was given back to the reader', async () => {
+      const slow = await newContext(browser, { viewport: viewport });
+      const tab = await slow.newPage();
+      watch(tab, errors);
+      let arrived;
+      const delivered = new Promise((resolve) => { arrived = resolve; });
+      await tab.route('**/reader*.js', async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, LATE));
+        await route.continue();
+      });
+      tab.on('requestfinished', (request) => { if (/\/reader[^/]*\.js/.test(request.url())) { arrived(); } });
+      await tab.goto(BASE + TEXT, { waitUntil: 'commit' });
+      await tab.waitForSelector('.site-footer', { state: 'attached' });
+      expectView(tag + '14 at first, no script yet', await look(tab), { parts: [1], forks: [1], buttons: [], hints: [], about: false, next: false });
+      // No script after three seconds: the inline script gives the whole text.
+      await tab.waitForFunction(() => !document.documentElement.classList.contains('js'), null, { timeout: 3 * TIMEOUT });
+      const WHOLE = { parts: [1, 2, 3, 4], forks: [1, 2, 3], hints: [], buttons: [], readOn: [1, 2, 3], lines: [KEYS, KEYS, KEYS], labels: 9, words: true, about: true, next: true };
+      expectView(tag + '14 after three seconds: the whole text', await look(tab), WHOLE);
+      // The reader goes on reading, down to the end of the text.
+      await tab.evaluate(() => {
+        document.documentElement.style.scrollBehavior = 'auto';
+        document.querySelector('.end-block.about').scrollIntoView();
+      });
+      const place = await tab.evaluate(() => ({ scrollY: Math.round(window.scrollY), height: document.documentElement.scrollHeight }));
+      await delivered;
+      await tab.waitForLoadState('load');
+      await tab.waitForTimeout(300);
+      const late = await look(tab);
+      expectView(tag + '14 the script has come: nothing closes', late, WHOLE);
+      const now = await tab.evaluate(() => ({ scrollY: Math.round(window.scrollY), height: document.documentElement.scrollHeight, js: document.documentElement.classList.contains('js'), ready: document.documentElement.hasAttribute('data-js-ready') }));
+      check(tag + '14 the reader is where they were', now.scrollY === place.scrollY && now.height === place.height && place.scrollY > 0, [place, now]);
+      check(tag + '14 the page stays plain until the next load', !now.js && !now.ready, now);
+      check(tag + '14 the late script kept nothing', Object.keys(late.storage).length === 0, late.storage);
+      await tab.unroute('**/reader*.js');
+      await tab.reload({ waitUntil: 'load' });
+      expectView(tag + '14 the next load, the script in time: closed as usual', await look(tab), CLOSED);
+      await slow.close();
+    });
+
+    await step(tag, 15, '15: the script fails half-way', async () => {
+      const cases = [['at its last step, all controls already shown', '[data-topic-examples]'], ['at the fork', '[data-fork-scope]']];
+      for (const item of cases) {
+        const broken = await newContext(browser, { viewport: viewport });
+        const tab = await broken.newPage();
+        watch(tab, errors);
+        // The script asks the page for this once; that one call fails.
+        await tab.addInitScript((selector) => {
+          const original = Document.prototype.querySelector;
+          Document.prototype.querySelector = function (asked) {
+            if (asked === selector) {
+              Document.prototype.querySelector = original;
+              window.plantedFailure = true;
+              throw new Error('planted failure');
+            }
+            return original.apply(this, arguments);
+          };
+        }, item[1]);
+        await open(tab, TEXT);
+        const view = await look(tab);
+        const page = await tab.evaluate(() => ({
+          failed: window.plantedFailure === true,
+          js: document.documentElement.classList.contains('js'),
+          ready: document.documentElement.hasAttribute('data-js-ready'),
+          toggle: document.querySelector('[data-ru-toggle]').getClientRects().length,
+          sentenceButtons: document.querySelectorAll('.s[role="button"], .s[tabindex]').length,
+        }));
+        check(tag + '15 ' + item[0] + ': the failure happened', page.failed, page);
+        expectView(tag + '15 ' + item[0] + ': the whole text', view, { parts: [1, 2, 3, 4], forks: [1, 2, 3], hints: [], buttons: [], readOn: [1, 2, 3], lines: [KEYS, KEYS, KEYS], labels: 9, words: true, about: true, next: true });
+        check(tag + '15 ' + item[0] + ': a plain page, no control that needs the script', !page.js && !page.ready && page.toggle === 0 && page.sentenceButtons === 0, page);
+        await broken.close();
+      }
+    });
 
     await context.close();
   }
 
-  if (wanted(6) && args.republish && args.revised) {
-    console.log('\nstep 6b: a new revision published while the text is read to the end (' + args.revised + ')');
+  if (wanted(6) && !(args.republish && args.revised)) {
+    console.log('');
+    skip('step 6b (a really published new revision): no --revised and --republish');
+  }
+  if (args.republish && args.revised) await step('', 6, '6b: a new revision published while the text is read to the end (' + args.revised + ')', async () => {
     const tabs = [];
     for (const viewport of VIEWPORTS) {
-      const context = await browser.newContext({ viewport: viewport });
+      const context = await newContext(browser, { viewport: viewport });
       const page = await context.newPage();
       watch(page, errors);
       await open(page, args.revised);
@@ -503,17 +758,14 @@ async function main() {
       await shot(tab.page, tab.width + '-06-new-revision-first-open');
       await tab.context.close();
     }
-  } else if (wanted(6)) {
-    console.log('\n  skip  step 6b (a really published new revision): no --revised and --republish');
-  }
+  });
 
-  if (wanted(8)) {
-    console.log('\nstep 8: the hint on each tone');
+  await step('', 8, '8: the hint on each tone', async () => {
     const tones = args.tones
       ? String(args.tones).split(',').map((pair) => ({ tone: pair.split(':')[0], url: pair.split(':').slice(1).join(':') }))
       : [{ tone: null, url: TEXT }, { tone: null, url: OTHER }];
     for (const viewport of VIEWPORTS) {
-      const context = await browser.newContext({ viewport: viewport, deviceScaleFactor: 2 });
+      const context = await newContext(browser, { viewport: viewport, deviceScaleFactor: 2 });
       const page = await context.newPage();
       watch(page, errors);
       for (const item of tones) {
@@ -548,11 +800,11 @@ async function main() {
     for (const row of contrastRows) {
       console.log('  ' + [String(row.width).padEnd(5), row.tone.padEnd(5), row.line.padEnd(4), row.text, row.background.padEnd(10), row.ratio.toFixed(2).padEnd(5), row.size.padEnd(7), row.weight].join('  '));
     }
-  }
+  });
 
   await browser.close();
   check('no errors in the console of any page', errors.length === 0, errors);
-  console.log('\nfork_steps: ' + passed + ' passed, ' + failed + ' failed');
+  console.log('\nfork_steps: ' + passed + ' passed, ' + failed + ' failed' + (skipped ? ', ' + skipped + ' skipped' : ''));
   process.exit(failed ? 1 : 0);
 }
 
