@@ -5,7 +5,9 @@
   <div class="wrap">
     <p class="kicker">Мастерская</p>
     <h1>Новый проект</h1>
-    <p class="page-head__lead">Задайте вопрос о книге с нашей полки. Мастерская ответит коротким текстом на простом английском с переводом каждого предложения; под каждой частью будет место в книге и отрывок из неё.</p>
+    {# With an empty shelf nothing on this page invites to ask: no form, no price. #}
+    {% if shelf_books %}<p class="page-head__lead">Задайте вопрос о книге с нашей полки. Мастерская ответит коротким текстом на простом английском с переводом каждого предложения; под каждой частью будет место в книге и отрывок из неё.</p>
+    {% else %}<p class="page-head__lead">Мастерская отвечает на вопросы о книгах с нашей полки. Сейчас полка пуста.</p>{% endif %}
   </div>
   {% include 'includes/fork.html' %}
 </header>
@@ -37,9 +39,6 @@
             <p class="meta" id="topic-help">По-русски или по-английски, до {{ max_question_chars }} символов.</p>
             <button type="submit">Создать текст</button>
         </form>
-        {% else %}
-        <p class="shelf-empty" lang="en">There are no books on our shelf yet.<span class="ru-ui" lang="ru">На полке пока нет книг: задать вопрос о книге сейчас нельзя.</span></p>
-        {% endif %}
         <div class="prose workshop-terms">
             <ul>
                 <li>Ответ с источниками — <strong>{{ costs.generate }}</strong> кредитов.</li>
@@ -49,6 +48,10 @@
             <p><a class="tap" href="{% url 'library:credits_help' %}">Как работают кредиты</a></p>
             <p class="meta">Загрузка собственных файлов (TXT, MD, PDF) в интерфейсе пока недоступна. Секретные документы загружать нельзя.</p>
         </div>
+        {% else %}
+        <p class="shelf-empty" lang="en">There are no books on our shelf yet.<span class="ru-ui" lang="ru">На полке пока нет книг: задать вопрос о книге сейчас нельзя.</span></p>
+        <p class="refusal__next"><a class="btn" href="{% url 'library:home' %}" lang="en">Go to the library</a><span class="ru-ui" lang="ru">Перейти в библиотеку</span></p>
+        {% endif %}
     </div>
 </section>
 {% endblock %}

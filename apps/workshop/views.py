@@ -9,6 +9,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.ai.grounding import has_sources
 from apps.ai.models import AIJob
 from apps.ai.services import EDIT_NOT_SUPPORTED_MESSAGE, InsufficientCredits, JobConflict, JobError, QueueFull, create_job
+from apps.credits.models import CreditReservation
 from apps.sources.shelf import shelf_books
 
 from .asking import QuestionRefused, normalize_question, open_question
@@ -70,7 +71,7 @@ def create_project(request):
 @login_required
 def project_detail(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
-    return render(request, "workshop/project.html", _project_context(request, project))
+    return _project_page(request, project)
 
 
 def _snapshot_links(edition) -> list:
@@ -99,11 +100,15 @@ def _parts_with_sources(payload):
     ]
 
 
-def _no_text_state(project):
+def _creation_job(project):
+    """The latest job that was asked to make the text of the project."""
+    return project.jobs.filter(kind=AIJob.Kind.GENERATE).order_by("-created_at").first()
+
+
+def _no_text_state(job):
     """Why a project has no text, from its `generate` job: `waiting`,
     `no_source`, `search_unavailable`, `source_validation_failed`,
     `explained` (the model asked to clarify or refused) or `failed`."""
-    job = project.jobs.filter(kind=AIJob.Kind.GENERATE).order_by("-created_at").first()
     if job is None or job.status in (AIJob.Status.QUEUED, AIJob.Status.RUNNING):
         return "waiting"
     if job.outcome == AIJob.Outcome.NO_SOURCE:
@@ -115,10 +120,24 @@ def _no_text_state(project):
     return "failed"
 
 
+def _nothing_was_charged(job) -> bool:
+    """True when the job is over and its reservation was given back (or
+    was never made): only then the page may say «No credits were taken»."""
+    if job is None or job.status in (AIJob.Status.QUEUED, AIJob.Status.RUNNING, AIJob.Status.RECONCILIATION):
+        return False
+    reservation = CreditReservation.objects.filter(job=job).first()
+    return reservation is None or reservation.state == CreditReservation.State.RELEASED
+
+
 def _project_context(request, project):
     revision = project.head_revision
     payload = revision.payload if revision else {}
-    state = "text" if revision else _no_text_state(project)
+    sourced = has_sources(payload)
+    job = _creation_job(project)
+    state = "text" if revision else _no_text_state(job)
+    # The reader's question in full (the title of the project may be cut).
+    # A text made before «answer with a source» has a topic, not a question.
+    question = (job.input_json.get("instruction") or "") if job is not None and (sourced or revision is None) else ""
     context = {
         "project": project,
         "messages_list": Message.objects.filter(project=project, owner=request.user).select_related("job"),
@@ -126,15 +145,23 @@ def _project_context(request, project):
         "revisions": project.revisions.order_by("-created_at")[:20],
         "parts": _parts_with_sources(payload),
         # An answer with sources: no edit forms (see edit_fragment).
-        "sourced": has_sources(payload),
+        "sourced": sourced,
         "source_editions": payload.get("source_editions") or [],
         "state": state,
+        "question": question,
     }
     if state not in ("text", "waiting"):
         # A final screen without a text: no versions, no discussion.
         context["shelf_books"] = shelf_books()
+        context["no_charge"] = _nothing_was_charged(job)
         context["explanation"] = Message.objects.filter(project=project, owner=request.user, role="assistant", kind="explanation").order_by("-created_at").first()
     return context
+
+
+def _project_page(request, project, status=200, **extra):
+    """The page of a project, also when an action on it was refused: the
+    text, its versions and the discussion stay where they were."""
+    return render(request, "workshop/project.html", {**_project_context(request, project), **extra}, status=status)
 
 
 @require_POST
@@ -144,17 +171,17 @@ def ask(request, project_id):
     if not settings.ASK_ENABLED:
         # Switched off: a direct POST gets the same page with the text and
         # no job, reservation or message is created.
-        return render(request, "workshop/project.html", _project_context(request, project), status=403)
+        return _project_page(request, project, status=403)
     instruction = request.POST.get("instruction", "").strip()
     if not instruction or len(instruction) > 2000:
-        return render(request, "workshop/project.html", {"project": project, "error": "Введите вопрос до 2000 символов"}, status=400)
+        return _project_page(request, project, status=400, error="Введите вопрос до 2000 символов")
     key = request.POST.get("idempotency_key", "").strip() or uuid.uuid4().hex
     try:
         create_job(owner=request.user, kind=AIJob.Kind.ASK, idempotency_key=key, instruction=instruction, project=project, base_revision=project.head_revision)
     except InsufficientCredits as exc:
-        return render(request, "workshop/project.html", {"project": project, "error": str(exc), "instruction": instruction}, status=402)
+        return _project_page(request, project, status=402, error=str(exc), instruction=instruction)
     except (JobConflict, QueueFull, JobError) as exc:
-        return render(request, "workshop/project.html", {"project": project, "error": str(exc), "instruction": instruction}, status=409)
+        return _project_page(request, project, status=409, error=str(exc), instruction=instruction)
     return redirect("workshop:project", project_id=project.pk)
 
 
@@ -169,7 +196,7 @@ def edit_fragment(request, project_id):
     if kind not in (AIJob.Kind.EDIT_SENTENCE, AIJob.Kind.EDIT_PART):
         return redirect("workshop:project", project_id=project.pk)
     if not instruction or len(instruction) > 1000:
-        return render(request, "workshop/project.html", {"project": project, "error": "Введите инструкцию до 1000 символов"}, status=400)
+        return _project_page(request, project, status=400, error="Введите инструкцию до 1000 символов")
     # Bare part index for edit_part, "part:sentence" for edit_sentence.
     try:
         if kind == AIJob.Kind.EDIT_PART:
@@ -177,18 +204,18 @@ def edit_fragment(request, project_id):
         else:
             part_idx, sentence_idx = (int(piece) for piece in target.split(":", 1))
     except ValueError:
-        return render(request, "workshop/project.html", {"project": project, "error": "Некорректная цель правки"}, status=400)
+        return _project_page(request, project, status=400, error="Некорректная цель правки")
     base = project.head_revision
     if base is None:
-        return render(request, "workshop/project.html", {"project": project, "error": "Нечего править: ревизии ещё нет"}, status=400)
+        return _project_page(request, project, status=400, error="Нечего править: ревизии ещё нет")
     if has_sources(base.payload):
         # Refused here and in create_job: no job, no reservation.
-        return render(request, "workshop/project.html", {**_project_context(request, project), "error": EDIT_NOT_SUPPORTED_MESSAGE}, status=409)
+        return _project_page(request, project, status=409, error=EDIT_NOT_SUPPORTED_MESSAGE)
     parts = base.payload.get("parts", [])
     if not 0 <= part_idx < len(parts):
-        return render(request, "workshop/project.html", {"project": project, "error": "Некорректная цель правки"}, status=400)
+        return _project_page(request, project, status=400, error="Некорректная цель правки")
     if kind == AIJob.Kind.EDIT_SENTENCE and not 0 <= sentence_idx < len(parts[part_idx].get("sentences", [])):
-        return render(request, "workshop/project.html", {"project": project, "error": "Некорректная цель правки"}, status=400)
+        return _project_page(request, project, status=400, error="Некорректная цель правки")
     key = request.POST.get("idempotency_key", "").strip() or uuid.uuid4().hex
     try:
         create_job(
@@ -201,9 +228,9 @@ def edit_fragment(request, project_id):
             target_id=target,
         )
     except InsufficientCredits as exc:
-        return render(request, "workshop/project.html", {"project": project, "error": str(exc)}, status=402)
+        return _project_page(request, project, status=402, error=str(exc))
     except (JobConflict, QueueFull, JobError) as exc:
-        return render(request, "workshop/project.html", {"project": project, "error": str(exc)}, status=409)
+        return _project_page(request, project, status=409, error=str(exc))
     return redirect("workshop:project", project_id=project.pk)
 
 
@@ -243,11 +270,11 @@ def apply_head(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
     revision_id = request.POST.get("revision_id", "").strip()
     if not revision_id:
-        return render(request, "workshop/project.html", {"project": project, "error": "Не указана ревизия"}, status=400)
+        return _project_page(request, project, status=400, error="Не указана ревизия")
     try:
         candidate = Revision.objects.get(pk=revision_id, project=project)
     except (Revision.DoesNotExist, ValueError, TypeError):
-        return render(request, "workshop/project.html", {"project": project, "error": "Ревизия не найдена"}, status=404)
+        return _project_page(request, project, status=404, error="Ревизия не найдена")
     if project.head_revision_id == candidate.pk:
         return redirect("workshop:project", project_id=project.pk)
     project.head_revision = candidate

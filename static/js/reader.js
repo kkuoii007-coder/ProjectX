@@ -233,6 +233,22 @@
     window.setInterval(showNext, 4000);
   }
 
+  /* ---- printing an answer: every source line goes on paper opened ---------- */
+
+  function initPrintSources() {
+    var opened = [];
+    window.addEventListener('beforeprint', function () {
+      var lines = doc.querySelectorAll('details.source:not([open])');
+      for (var i = 0; i < lines.length; i += 1) {
+        lines[i].open = true;
+        opened.push(lines[i]);
+      }
+    });
+    window.addEventListener('afterprint', function () {
+      while (opened.length) { opened.pop().open = false; }
+    });
+  }
+
   function init() {
     try {
       initGlosses();
@@ -240,6 +256,7 @@
       initMenu();
       initForks();
       initTopicExamples();
+      initPrintSources();
       // Enhance only when everything above worked. The page waits for this
       // mark: without it the inline script in <head> takes the js class back.
       root.setAttribute('data-js-ready', '');

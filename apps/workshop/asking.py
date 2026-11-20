@@ -15,6 +15,7 @@ from apps.sources.shelf import shelf_books
 
 from .models import Project
 
+TITLE_CHARS = 200  # Project.title; the whole question lives in the job
 EMPTY_SHELF_MESSAGE = "На полке пока нет книг: задать вопрос о книге сейчас нельзя."
 
 
@@ -62,7 +63,7 @@ def open_question(*, owner, question: str, mode=Project.Mode.EXPLAIN):
     if not shelf_books():
         raise ShelfEmpty(EMPTY_SHELF_MESSAGE)
     with transaction.atomic():
-        project = Project.objects.create(owner=owner, title=question[:200], mode=mode)
+        project = Project.objects.create(owner=owner, title=question[:TITLE_CHARS], mode=mode)
         job, _ = create_job(
             owner=owner,
             kind=AIJob.Kind.GENERATE,

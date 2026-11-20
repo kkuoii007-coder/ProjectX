@@ -1873,6 +1873,27 @@ td form.inline {
   color: var(--ink-3);
 }
 
+/* The reader's question in full, in every state of the project page: the
+   heading above may be cut. */
+.asked {
+  max-width: 42rem;
+  margin: 0 0 var(--s-5);
+  overflow-wrap: anywhere;
+}
+
+.asked__label {
+  display: block;
+  margin-bottom: var(--s-1);
+  font: 500 var(--fs-0)/1.4 var(--font-ui);
+  color: var(--ink-3);
+}
+
+.asked__text {
+  white-space: pre-line; /* the line breaks the reader typed */
+  font: 400 var(--fs-2)/1.5 var(--font-text);
+  color: var(--ink);
+}
+
 /* One line per source under a part. A native details element: the summary is
    the line, the excerpt and the attribution open under it. */
 .sources {
@@ -1884,15 +1905,18 @@ td form.inline {
 }
 
 .source summary {
-  padding-block: 0.6rem; /* keeps the marker and a 44px target */
+  box-sizing: border-box;
+  min-height: 44px; /* a touch target at every width */
+  padding-block: 0.7rem;
   color: var(--ink-2);
   cursor: pointer;
   overflow-wrap: anywhere;
 }
 
+/* The space between the line and its caption is in the markup. */
 .source summary .ru-ui {
   display: inline;
-  margin-left: 0.5em;
+  margin-left: 0.25em;
   color: var(--ink-3);
 }
 
@@ -1905,7 +1929,7 @@ td form.inline {
 }
 
 .source__excerpt {
-  margin: 0 0 var(--s-3);
+  margin: var(--s-2) 0 var(--s-3); /* clear of the focus ring of the line above */
   padding: 0 0 0 var(--s-4);
   border-left: 2px solid var(--line-strong);
   font: 400 var(--fs-2)/1.5 var(--font-text);
@@ -2306,5 +2330,52 @@ td form.inline {
 
   .gloss {
     display: none !important;
+  }
+
+  /* The workshop: the answer goes on paper with its sources opened; the
+     way back, the versions and the discussion do not. */
+  .workshop-back,
+  .workshop-service,
+  .workshop-edit,
+  .refusal__next {
+    display: none !important;
+  }
+
+  /* A closed <details> is printed open: the excerpt and the edition. Where
+     ::details-content is not supported, reader.js opens the lines before
+     printing. */
+  .source::details-content {
+    display: block;
+    content-visibility: visible;
+  }
+
+  .source,
+  .source[open] {
+    margin-block: 0 0.5rem;
+    padding: 0;
+    background: none;
+    border: 0;
+    break-inside: avoid;
+  }
+
+  .source summary {
+    min-height: 0;
+    padding-block: 0.2rem;
+    list-style: none;
+    color: #000;
+  }
+
+  .source summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .source__excerpt,
+  .source__attribution,
+  .edition-links a {
+    color: #000;
+  }
+
+  .edition-links a {
+    min-height: 0;
   }
 }
