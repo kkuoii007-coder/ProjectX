@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
@@ -105,6 +105,10 @@ def read(request, slug):
 def thinker(request, slug):
     thinker = get_object_or_404(Thinker, slug=slug)
     publications = _published().filter(thinker=thinker).order_by("-published_at", "slug")
+    if not publications.exists():
+        # A thinker with no published text has no page: an empty shell
+        # would stay reachable after the last text is withdrawn.
+        raise Http404("No published texts for this thinker")
     context = {"thinker": thinker, "publications": publications, "items": [publication_item(p) for p in publications]}
     return render(request, "library/thinker.html", context)
 
@@ -113,6 +117,8 @@ def thinker(request, slug):
 def collection(request, slug):
     collection = get_object_or_404(Collection, slug=slug)
     publications = collection.publications.filter(status=Publication.Status.PUBLISHED).select_related("revision", "thinker")
+    if not publications.exists():
+        raise Http404("No published texts in this collection")
     context = {"collection": collection, "publications": publications, "items": [publication_item(p) for p in publications]}
     return render(request, "library/collection.html", context)
 
