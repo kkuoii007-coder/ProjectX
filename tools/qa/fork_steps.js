@@ -644,7 +644,13 @@ async function main() {
           await answer(tab, 1, 'no');
           check(tag + '13 (real) an answer on the kept page keeps the rest', same(kept(await look(tab)), { answers: { 1: 'no', 2: 'no', 3: 'not_sure' }, upto: 4 }), (await look(tab)).storage);
         } else {
-          skip(tag + '13 (real): this browser loaded the page again instead of keeping it');
+          // Chromium names its reasons; the line says why the step was left out.
+          const why = await tab.evaluate(() => {
+            const entry = performance.getEntriesByType('navigation')[0];
+            const told = entry && entry.notRestoredReasons;
+            return told ? JSON.stringify((told.reasons || []).map((one) => one.reason || one)) : 'no reason given';
+          }).catch(() => 'no reason given');
+          skip(tag + '13 (real): this browser loaded the page again instead of keeping it (' + why + ')');
         }
       } finally {
         await keeping.close();
