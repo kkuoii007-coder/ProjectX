@@ -46,6 +46,10 @@ ATTRIBUTION = (
 POLITICAL_ANIMAL = "Почему Аристотель называет человека политическим животным?"
 KANT = "Что такое категорический императив у Канта?"
 HEIDEGGER = "Что такое заброшенность у Хайдеггера?"
+# A question about the book with a name the lexicon of the book does not
+# know: the text half finds the place but with a low coverage (control
+# question 6 of the owner behaves the same way on the full book).
+WITH_PLATO = "Почему человек — политическое животное у Аристотеля, а не у Платона?"
 RELATED_TEXT = "why-do-people-live-in-cities"  # named in the fixture manifest (`related_texts`)
 # What the licence of the source asks to show next to the attribution
 # (addresses from the manifest): digital publisher, source file, licence.
@@ -374,6 +378,34 @@ class SearchUnavailableTests(AnswerBase):
         self.assertIsNone(search["best_vector_raw"])
         self.assertGreaterEqual(search["best_fts_coverage"], settings.SHELF_MIN_FTS_COVERAGE)
         self.assertEqual(len(SOURCE_LINE.findall(self.project_page(project))), 3)
+
+    def test_question_with_a_name_outside_the_lexicon_needs_the_vector_half(self):
+        """The text coverage is under the threshold because of one unknown
+        name: the question is answered by the vector half."""
+        project, job = self.ask(WITH_PLATO)
+        search = job.result_reference["search"]
+        self.assertEqual(job.outcome, AIJob.Outcome.DELIVERED, job.result_reference)
+        self.assertEqual(search["unmapped_terms"], ["платона"])
+        self.assertLess(search["best_fts_coverage"], settings.SHELF_MIN_FTS_COVERAGE)
+        self.assertGreaterEqual(search["best_vector_raw"], settings.SHELF_MIN_VECTOR_SIMILARITY)
+        self.assertEqual(len(SOURCE_LINE.findall(self.project_page(project))), 3)
+
+    def test_question_with_a_name_outside_the_lexicon_and_no_vector_half(self):
+        before = self.wallet()
+        with mock.patch.object(retrieval, "embed_texts", no_embeddings), mock.patch.object(
+            FakeProvider, "generate", side_effect=AssertionError("the model must not be called")
+        ):
+            project, job = self.ask(WITH_PLATO)
+        self.assertEqual((job.status, job.outcome, job.error_code), (AIJob.Status.FAILED, None, "search_unavailable"), job.result_reference)
+        # Without the vector half: «поиск недоступен», never «источника нет».
+        search = job.result_reference["search"]
+        self.assertEqual((search["vector_available"], search["supports"], search["unmapped_terms"]), (False, 0, ["платона"]))
+        self.assertGreater(search["found"], 0)  # the place was found, but it is not a support
+        self.assertLess(search["best_fts_coverage"], settings.SHELF_MIN_FTS_COVERAGE)
+        self.assert_nothing_was_made_or_charged(project, job, before)
+        content = self.project_page(project)
+        self.assertIn("Search is not available now. Try again later.", content)
+        self.assertNotIn("We have no source for this yet.", content)
 
 
 class QuestionFormTests(AnswerBase):

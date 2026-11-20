@@ -101,6 +101,14 @@ class ShelfExperimentTests(TestCase):
             self.assertIn("Словарный профиль", section)
             self.assertIn("best vector_raw", section)
             self.assertIn("best fts_coverage", section)
+        # Question 6 is carried by the vector half alone: the name of Plato is
+        # not in the lexicon of the book and pulls the text coverage under
+        # the threshold. The report says which word did it.
+        sixth = re.search(r"best fts_coverage ([\d.]+) \(порог ([\d.]+)\)", sections[5])
+        self.assertLess(float(sixth.group(1)), float(sixth.group(2)))
+        self.assertRegex(sections[5], r"- Слова вопроса, которых текстовая половина не нашла на полке \(снижают fts_coverage\): .*платона")
+        self.assertNotIn("Слова вопроса, которых", sections[0])
+        self.assertIn("Вопрос 6 по текстовой половине даёт 0.21", header)
         # Two refusals: no text, the balance did not change.
         for section in sections[8:]:
             self.assertIn("Исход: `no_source`", section)
@@ -121,17 +129,22 @@ class ShelfExperimentTests(TestCase):
 
     def test_search_down_is_shown_as_such_and_not_as_no_source(self):
         """Questions 9 and 10 with the vector half down must not be counted
-        as a refusal «источника нет»."""
+        as a refusal «источника нет». Question 6 is not answered either: the
+        text half alone does not carry it."""
         Wallet.objects.filter(user=self.user).update(total_credits=100)
         with mock.patch.object(retrieval, "embed_texts", no_embeddings):
             self.run_command()
         with open(self.out, encoding="utf-8") as handle:
             sections = re.split(r"^## Вопрос \d+\n", handle.read(), flags=re.M)[1:]
-        for section in sections[8:]:
+        for section in [sections[5], *sections[8:]]:
             self.assertIn("Исход: нет (задача `failed`, код `search_unavailable`)", section)
             self.assertIn("vector_available: НЕТ", section)
             self.assertIn("это не отказ «источника нет»", section)
             self.assertNotIn("Исход: `no_source`", section)
+            self.assertIn("Кредиты: списано 0", section)
+        # A question whose words are in the book is still answered by the text half.
+        self.assertIn("Исход: `delivered`", sections[0])
+        self.assertIn("vector_available: НЕТ", sections[0])
 
     def test_waits_for_a_worker_by_default_and_times_out(self):
         Wallet.objects.filter(user=self.user).update(total_credits=100)

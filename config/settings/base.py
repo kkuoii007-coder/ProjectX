@@ -176,9 +176,14 @@ EMBEDDING_BATCH_SIZE = env_int("EMBEDDING_BATCH_SIZE", 16)
 # Both defaults are deliberately low: a wrong refusal of a real question is
 # worse than one extra model call, and the model refuses a second time when
 # the fragments do not answer the question.
-# - Coverage 0.5: on the full book the eight control questions reach 1.0 in
-#   the text half, questions about other authors asked in English reach
-#   0.40-0.46 ("thrownness in Heidegger", "Kant ... the state and freedom").
+# - Coverage 0.5: measured on the full book with the text half alone. Control
+#   questions 1-5, 7 and 8 reach 1.0; questions that are not about the book
+#   stay at 0.46 or lower ("thrownness in Heidegger" 0.42, "Kant ... the state
+#   and freedom" 0.33, "Что Хайдеггер говорит о государстве?" 0.03: a word
+#   that is not on the shelf counts against the coverage). Control question 6
+#   ("... общность имущества у Платона?") reaches only 0.21, because the name
+#   of Plato is not in the lexicon of the book: it has to pass by the vector
+#   half, and without it the answer is `search_unavailable`.
 # - Similarity 0.20: NOT calibrated (a calibration is a paid call). Set it
 #   from the scores printed by `search_sources` / `shelf_experiment`
 #   on the server.

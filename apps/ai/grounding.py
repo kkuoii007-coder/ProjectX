@@ -91,6 +91,11 @@ class Retrieval:
     vector_available: bool = True
     vector_error: str = ""
     elapsed_ms: float = 0.0
+    # Words of the question the text half could not look for: an English
+    # word that is nowhere on the shelf, a Russian word the lexicon of the
+    # book does not translate. They lower `fts_coverage`.
+    missing_terms: list = field(default_factory=list)
+    unmapped_terms: list = field(default_factory=list)
 
     @property
     def supports(self) -> list:
@@ -111,6 +116,8 @@ class Retrieval:
             "vector_error": self.vector_error,
             "best_vector_raw": max(vectors) if vectors else None,
             "best_fts_coverage": max(coverages) if coverages else None,
+            "missing_terms": list(self.missing_terms),
+            "unmapped_terms": list(self.unmapped_terms),
             "min_vector_similarity": settings.SHELF_MIN_VECTOR_SIMILARITY,
             "min_fts_coverage": settings.SHELF_MIN_FTS_COVERAGE,
             "search_ms": self.elapsed_ms,
@@ -159,6 +166,8 @@ def retrieve(job) -> Retrieval:
         vector_available=result.vector_available,
         vector_error=result.vector_error,
         elapsed_ms=result.elapsed_ms,
+        missing_terms=list(result.missing_terms),
+        unmapped_terms=list(result.unmapped_terms),
     )
 
 
