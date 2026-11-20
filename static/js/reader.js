@@ -1,8 +1,10 @@
 /* Philosophy Reader — small progressive-enhancement script, no dependencies.
    Without JS: Russian lines are visible, the menu is open, a fork in the text
-   is plain paragraphs. With JS: a Russian line opens under its own sentence.
-   Nothing here sends, saves or scores anything; the only stored value is the
-   reader's choice to show or hide Russian interface captions. */
+   is plain paragraphs and the whole text is there. With JS: a Russian line
+   opens under its own sentence, and a text with forks opens answer by answer.
+   Nothing here sends or scores anything. Two things are kept on this device
+   only: the choice to show or hide Russian interface captions, and how far
+   the reader has opened each text. */
 (function () {
   'use strict';
 
@@ -118,96 +120,176 @@
     });
   }
 
-  /* ---- a fork in the text: three buttons, one prepared line ----------------
-     With JS the part after a fork stays hidden until the reader picks an
-     answer; the choice is kept on this device only (localStorage), so a
-     reload does not close what is already read. Any of the three answers
-     opens the next part the same way; a made choice can be changed, and
-     what is open never closes again. */
+  /* ---- forks in the text: the reader opens it answer by answer -------------
+     A text with forks opens as a chain: the first part and its question, then
+     each answer shows its prepared line, the next part and the next question;
+     "About this text" and "Next question" come with the last part.
+     The page is drawn from one state, { answers, upto }: the answer given at
+     each fork and the number of parts that are open. render() sets the whole
+     page from it, so a later part can never be open above a closed one.
+     The state is kept on this device only, under a name of its own for each
+     text and revision (data-fork-scope): another text, or a new revision of
+     this one, starts closed. What is open never closes again; an answer can
+     be changed. A link to #part-N opens the text up to part N and answers
+     nothing for the reader. Nothing is sent and nothing is scored. */
 
-  var FORK_KEY = 'pr-fork-choices';
+  var FORK_PREFIX = 'pr-fork:';
+  var FORK_RETIRED_KEY = 'pr-fork-choices'; // one shared key for every text: no longer read, only removed
 
-  function readForkChoices() {
-    try {
-      var stored = JSON.parse(window.localStorage.getItem(FORK_KEY) || '{}');
-      return stored && typeof stored === 'object' ? stored : {};
-    } catch (error) { return {}; }
+  function readForkState(name) {
+    try { return JSON.parse(window.localStorage.getItem(name) || 'null'); } catch (error) { return null; }
   }
 
-  function writeForkChoices(choices) {
-    try { window.localStorage.setItem(FORK_KEY, JSON.stringify(choices)); } catch (error) { /* private mode: the choice lasts for this page */ }
+  function writeForkState(name, state) {
+    try { window.localStorage.setItem(name, JSON.stringify(state)); } catch (error) { /* private mode: the state lasts for this page */ }
+  }
+
+  // Answers to an earlier revision of this text are of no use to anyone.
+  function dropStaleForkStates(scope) {
+    try {
+      var storage = window.localStorage;
+      var sameText = FORK_PREFIX + scope.slice(0, scope.lastIndexOf(':') + 1);
+      var stale = [FORK_RETIRED_KEY];
+      for (var i = 0; i < storage.length; i += 1) {
+        var name = storage.key(i);
+        if (name && name.indexOf(sameText) === 0 && name !== FORK_PREFIX + scope) { stale.push(name); }
+      }
+      stale.forEach(function (name) { storage.removeItem(name); });
+    } catch (error) { /* no storage: nothing to clean */ }
   }
 
   function initForks() {
-    var forks = doc.querySelectorAll('[data-fork]');
-    if (!forks.length) { return; }
-    var saved = readForkChoices();
+    var reader = doc.querySelector('[data-fork-scope]');
+    if (!reader) { return; }
+    var scope = reader.getAttribute('data-fork-scope');
+    var name = FORK_PREFIX + scope;
+
+    // The chain, in the order of the page: parts, and the fork after each.
+    var parts = [];
+    var forks = [];
+    Array.prototype.forEach.call(reader.querySelectorAll('[data-part], [data-fork]'), function (el) {
+      if (el.hasAttribute('data-part')) { parts.push(el); return; }
+      var group = el.querySelector('[data-fork-buttons]');
+      var buttons = Array.prototype.slice.call(el.querySelectorAll('[data-fork-choice]'));
+      if (!parts.length || !group || !buttons.length) { return; }
+      forks.push({
+        el: el,
+        after: parts.length, // this fork closes the way from part `after` to the next one
+        id: parts[parts.length - 1].getAttribute('data-part'),
+        group: group,
+        buttons: buttons,
+        hint: el.querySelector('[data-fork-hint]')
+      });
+    });
+    var ends = reader.querySelectorAll('[data-reader-end]');
+    var total = parts.length;
+    if (!total) { return; }
+
+    function forkAfter(number) {
+      for (var i = 0; i < forks.length; i += 1) { if (forks[i].after === number) { return forks[i]; } }
+      return null;
+    }
+
+    var state = { answers: {}, upto: 1 };
+
+    // The one rule of the chain: a part is followed by the next one as soon as
+    // nothing stands between them, or the fork between them has an answer.
+    function advance() {
+      while (state.upto < total) {
+        var fork = forkAfter(state.upto);
+        if (fork && !state.answers[fork.id]) { break; }
+        state.upto += 1;
+      }
+    }
+
+    function restore() {
+      var stored = readForkState(name);
+      if (stored && typeof stored === 'object') {
+        var upto = parseInt(stored.upto, 10);
+        if (upto >= 1) { state.upto = Math.min(upto, total); }
+        var answers = stored.answers && typeof stored.answers === 'object' ? stored.answers : {};
+        forks.forEach(function (fork) {
+          var known = fork.buttons.some(function (button) { return button.getAttribute('data-fork-key') === answers[fork.id]; });
+          if (known) { state.answers[fork.id] = answers[fork.id]; }
+        });
+      }
+      advance();
+      // An answer to a fork the reader has not reached is not kept.
+      forks.forEach(function (fork) { if (fork.after > state.upto) { delete state.answers[fork.id]; } });
+    }
+
+    function render() {
+      parts.forEach(function (part, index) { part.classList.toggle('is-reached', index < state.upto); });
+      forks.forEach(function (fork) {
+        var answer = state.answers[fork.id] || null;
+        // Passed: the text after this fork is open (by an answer or by a link).
+        var passed = fork.after < state.upto || !!answer;
+        fork.el.classList.toggle('is-reached', fork.after <= state.upto);
+        fork.el.classList.toggle('is-passed', passed);
+        if (fork.hint) { fork.hint.hidden = passed; }
+        fork.buttons.forEach(function (button) {
+          var chosen = button.getAttribute('data-fork-key') === answer;
+          var line = doc.getElementById(button.getAttribute('data-fork-choice'));
+          button.setAttribute('aria-pressed', String(chosen));
+          if (line) { line.classList.toggle('is-chosen', chosen); }
+        });
+      });
+      Array.prototype.forEach.call(ends, function (block) { block.classList.toggle('is-reached', state.upto >= total); });
+    }
+
+    function choose(fork, button) {
+      state.answers[fork.id] = button.getAttribute('data-fork-key');
+      advance();
+      writeForkState(name, state);
+      render();
+      // Focus moves to the chosen answer's line, so the reader can go on.
+      var line = doc.getElementById(button.getAttribute('data-fork-choice'));
+      if (line) { line.focus(); }
+    }
+
+    // A link to #part-N opens the text up to that part. The browser cannot
+    // scroll to a closed part, so the scroll is repeated once it is open.
+    function openFromHash(arriving) {
+      var match = /^#part-(\d+)$/.exec(window.location.hash || '');
+      var target = match ? doc.getElementById('part-' + match[1]) : null;
+      var index = parts.indexOf(target);
+      if (index < 0) { return; }
+      var wasClosed = index >= state.upto;
+      if (wasClosed) {
+        state.upto = index + 1;
+        advance();
+        writeForkState(name, state);
+        render();
+      }
+      if (wasClosed || arriving) {
+        target.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true }); // Tab goes on from this part, as after any jump inside a page
+        // A page opened by the link starts at the part at once, as the browser does it.
+        target.scrollIntoView(arriving ? { behavior: 'instant', block: 'start' } : true);
+      }
+    }
+
+    // On a reload or a step back the browser returns to the old place itself.
+    function arrivedByLink() {
+      try {
+        var entry = window.performance.getEntriesByType('navigation')[0];
+        return !entry || entry.type === 'navigate';
+      } catch (error) { return true; }
+    }
 
     forks.forEach(function (fork) {
-      var group = fork.querySelector('[data-fork-buttons]');
-      var buttons = fork.querySelectorAll('[data-fork-choice]');
-      if (!group || !buttons.length) { return; }
-
-      // The part this fork opens; it is hidden until an answer is chosen.
-      var nextPart = null;
-      if (fork.dataset.forkNext) {
-        nextPart = doc.getElementById('part-' + fork.dataset.forkNext);
-      }
-      var hint = fork.querySelector('[data-fork-hint]');
-
-      function mark(button) {
-        buttons.forEach(function (other) {
-          var option = doc.getElementById(other.getAttribute('data-fork-choice'));
-          var chosen = other === button;
-          other.setAttribute('aria-pressed', String(chosen));
-          if (option) { option.classList.toggle('is-chosen', chosen); }
-        });
-        fork.classList.add('has-choice');
-      }
-
-      function choose(button, silent) {
-        mark(button);
-        var key = fork.dataset.forkId;
-        if (key) {
-          saved[key] = button.getAttribute('data-fork-key');
-          writeForkChoices(saved);
-        }
-        if (hint) { hint.hidden = true; }
-        if (nextPart) {
-          nextPart.classList.remove('is-locked');
-          nextPart.removeAttribute('aria-hidden');
-        }
-        if (!silent) {
-          // Focus moves to the chosen answer's line, so the reader can go on.
-          var line = doc.getElementById(button.getAttribute('data-fork-choice'));
-          if (line) { line.focus(); }
-        }
-      }
-
-      buttons.forEach(function (button) {
+      fork.buttons.forEach(function (button) {
         button.setAttribute('aria-controls', button.getAttribute('data-fork-choice'));
-        button.addEventListener('click', function () { choose(button); });
+        button.addEventListener('click', function () { choose(fork, button); });
       });
-      group.hidden = false;
-      fork.classList.add('is-ready');
-
-      // A choice kept on this device re-opens what was read, without focus.
-      var key = fork.dataset.forkId;
-      var remembered = key ? saved[key] : null;
-      if (remembered) {
-        var found = Array.prototype.some.call(buttons, function (button) {
-          if (button.getAttribute('data-fork-key') === remembered) { choose(button, true); return true; }
-          return false;
-        });
-        if (found) { return; }
-      }
-      // Nothing chosen yet (or the stored answer no longer exists): the part
-      // after this fork waits for a choice.
-      if (nextPart) {
-        nextPart.classList.add('is-locked');
-        nextPart.setAttribute('aria-hidden', 'true');
-      }
+      fork.group.hidden = false;
     });
+
+    dropStaleForkStates(scope);
+    restore();
+    render();
+    openFromHash(arrivedByLink());
+    window.addEventListener('hashchange', function () { openFromHash(false); });
   }
 
   /* ---- rotating topic examples on the workshop entry form ------------------ */

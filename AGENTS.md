@@ -61,7 +61,7 @@ ink on paper. A translation opens under its own sentence, at any width.
 - `static/css/fonts.css` + `static/fonts/` — Literata (text, headings) and
   Golos Text (UI, translations), self-hosted woff2 with their OFL texts.
   No external font/CDN requests.
-- `static/js/reader.js` — the only JS file (~165 lines, no dependencies), plus
+- `static/js/reader.js` — the only JS file of the site (~330 lines, no dependencies), plus
   one inline line in `<head>` that sets the `js` and `ui-ru-off` classes before
   the first paint and removes them if the file fails to load. Pages must
   stay usable without JS: translations visible, menu expanded.
@@ -84,10 +84,21 @@ ink on paper. A translation opens under its own sentence, at any width.
   or variable expressions across newlines. All POST forms must render a real
   CSRF input, including forms inside `details`.
 - Test 390/768/1440 plus 320px, script failure and no-JS. On 390x844 the first
-  English sentence of a text is visible without scrolling. A fork in the text
-  (`data-fork`) reveals one prepared line per choice; it is not a form and
-  nothing is sent, saved or scored; without JS it is plain paragraphs. Keep
+  English sentence of a text is visible without scrolling. Keep
   English/Russian learning payloads unchanged.
+- A text with forks (`data-fork`) opens as a chain: first only part 1 and its
+  question; each answer shows its prepared line, the next part and the next
+  question; `About this text` and `Next question` come with the last part,
+  `Words` and the reader's tools are always there. `reader.js` draws the whole
+  page from one state in one `render()`; do not open or close single blocks
+  elsewhere. The state lives on the device only, under `pr-fork:<slug>:<revision
+  hash>` (`data-fork-scope`): another text and a new revision start closed.
+  What is open never closes; an answer can be changed; `#part-N` opens the
+  text up to part N and answers nothing. A fork is not a form: nothing is sent
+  or scored. Closing is CSS under `.js` inside `@media screen` only, so
+  without JS, on a script failure and in print the whole text is there with
+  the lines of all answers. Browser check: `tools/qa/fork_steps.js`
+  (Playwright, an acceptance tool, not in the test suite).
 - Tables use `.table-scroll` with a focusable labelled region. Keep auth,
   registration, error, empty and workshop states at the same quality as home.
 - Use isolated PostgreSQL + pgvector and `AI_PROVIDER=fake`,

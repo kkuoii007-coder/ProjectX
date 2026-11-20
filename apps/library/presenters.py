@@ -11,6 +11,7 @@ COVER_LINES = 2
 COVER_TONES = ("clay", "sea", "olive")
 DEFAULT_TONE = "clay"
 FORK_KEYS = ("yes", "no", "not_sure")
+FORK_SCOPE_HASH_CHARS = 16
 
 
 def _text(value):
@@ -94,6 +95,19 @@ def _fork(fork, number):
         "options": options,
         "next_part": None,
     }
+
+
+def fork_scope(publication, parts):
+    """Name of the reader's place in one text: its address and its revision.
+
+    The reader script keeps the answers to the forks on the device under this
+    name, so one text never opens another and a new revision starts closed.
+    The content hash is fixed for a revision and says nothing private; a text
+    without forks has no scope and is never closed.
+    """
+    if not any(part.get("fork") for part in parts):
+        return ""
+    return f"{publication.slug}:{publication.revision.content_hash[:FORK_SCOPE_HASH_CHARS]}"
 
 
 def titles(payload):
