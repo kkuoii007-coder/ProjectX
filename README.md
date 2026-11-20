@@ -218,7 +218,7 @@ venv/bin/python manage.py vocabulary_profile content/texts/<slug>.json
   открывает текст до части N и не выбирает ответов за читателя. Без JavaScript,
   при сбое скрипта и при печати виден весь текст со строками всех ответов.
   Ничего не отправляется на сервер и не оценивается. Сценарий приёмки в
-  браузере — `tools/qa/fork_steps.js` (в CI не запускается), снимки шагов —
+  браузере — `tools/qa/fork_steps.js` (задача `browser` в CI), снимки шагов —
   `docs/screenshots/pr1-fork/`.
 - Форма мастерской перенесена с главной на `/projects/new/`.
 - Путь чтения (главная, библиотека, читалка) — на английском с русскими
@@ -368,6 +368,11 @@ venv/bin/python manage.py check
 каждый pull request и на каждый push в `main`: чистый PostgreSQL 16 с pgvector,
 Python 3.12, `check`, `makemigrations --check`, `migrate`, полный набор тестов.
 Платных вызовов нет: тесты работают с поддельным провайдером.
+Вторая задача того же файла, `browser`, проходит читалку в Chromium сценарием
+`tools/qa/fork_steps.js` на чистой базе, которую готовит
+`tools/qa/seed_browser_check.py` (публикует оба текста с заглушкой проверяющего;
+работает только при `PR_BROWSER_CHECK=1`, поддельном провайдере и `DEBUG`, на
+сервере не запускать).
 
 ## Management commands
 
