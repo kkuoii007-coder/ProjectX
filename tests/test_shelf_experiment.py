@@ -35,7 +35,8 @@ class ShelfExperimentTests(TestCase):
 
     def run_command(self, **options):
         out = io.StringIO()
-        call_command("shelf_experiment", login="runner", out=self.out, inline=True, stdout=out, stderr=io.StringIO(), **options)
+        options.setdefault("out", self.out)
+        call_command("shelf_experiment", login="runner", inline=True, stdout=out, stderr=io.StringIO(), **options)
         return out.getvalue()
 
     def test_questions_are_the_owners_ten_word_for_word(self):
@@ -63,6 +64,17 @@ class ShelfExperimentTests(TestCase):
         self.assertIn("100", str(raised.exception))
         self.assertFalse(AIJob.objects.exists())
         self.assertFalse(os.path.exists(self.out))
+
+    def test_stops_before_the_first_question_when_the_report_cannot_be_written(self):
+        Wallet.objects.filter(user=self.user).update(total_credits=100)
+        blocker = os.path.join(self.folder, "a-file")
+        with open(blocker, "w", encoding="utf-8"):
+            pass
+        with self.assertRaises(CommandError) as raised:
+            self.run_command(out=os.path.join(blocker, "report.md"))
+        self.assertIn("--out", str(raised.exception))
+        self.assertFalse(AIJob.objects.exists())
+        self.assertEqual(Wallet.objects.get(user=self.user).total_credits, 100)
 
     def test_unknown_login_is_an_error(self):
         with self.assertRaises(CommandError):

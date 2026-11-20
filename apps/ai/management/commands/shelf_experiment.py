@@ -114,6 +114,16 @@ class Command(BaseCommand):
             raise CommandError(str(exc)) from exc
 
         out = options["out"] if os.path.isabs(options["out"]) else os.path.join(settings.BASE_DIR, options["out"])
+        # Before the first (paid) question: the report must have a place to go.
+        try:
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            existed = os.path.exists(out)
+            with open(out, "a", encoding="utf-8"):
+                pass
+            if not existed:
+                os.remove(out)
+        except OSError as exc:
+            raise CommandError(f"Отчёт нельзя записать в {out}: {exc}. Укажите другой путь: --out /путь/report.md") from exc
         header = self._header(user, books, options)
         records, stopped = [], ""
         for number, question in enumerate(QUESTIONS, start=1):
