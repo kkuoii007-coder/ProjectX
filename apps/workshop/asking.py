@@ -4,6 +4,8 @@ The form of the workshop and the control run (`shelf_experiment`) both call
 `open_question`, so the run asks its questions exactly as the site does.
 """
 
+import unicodedata
+import unicodedata
 import uuid
 
 from django.conf import settings
@@ -33,14 +35,38 @@ class QuestionTooLong(QuestionRefused):
     pass
 
 
+class QuestionUnreadable(QuestionRefused):
+    """NUL and other control characters: PostgreSQL refuses NUL in text, and
+    none of them is something a reader types."""
+
+
 class ShelfEmpty(QuestionRefused):
     status = 409
+
+
+class QuestionNotText(QuestionRefused):
+    """A NUL byte or another control character: the database cannot store
+    it, so the question is refused here with a message, not with a 500."""
+
+
+CONTROL_CHARACTERS_MESSAGE = "В тексте есть служебные символы, которые нельзя сохранить. Уберите их и отправьте ещё раз."
+
+
+def has_control_characters(text: str) -> bool:
+    """Control characters (Unicode category Cc) other than a line break
+    and a tab. A NUL byte is one of them."""
+    return any(unicodedata.category(char) == "Cc" and char not in "\n\t" for char in text or "")
+
+
+def without_control_characters(text: str) -> str:
+    """For showing a refused text again in the form."""
+    return "".join(char for char in text or "" if unicodedata.category(char) != "Cc" or char in "\n\t")
 
 
 def normalize_question(raw: str) -> str:
     """A browser counts a line break in a textarea as one character and
     sends two; the limit counts what the reader saw."""
-    return (raw or "").replace("\r\n", "\n").strip()
+    return (raw or "").replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
 def open_question(*, owner, question: str, mode=Project.Mode.EXPLAIN):
@@ -54,8 +80,12 @@ def open_question(*, owner, question: str, mode=Project.Mode.EXPLAIN):
     MAX_QUESTION_CHARS is refused, never cut.
     """
     question = normalize_question(question)
+    if has_control_characters(question):
+        raise QuestionNotText(CONTROL_CHARACTERS_MESSAGE)
     if not question:
         raise QuestionEmpty("Введите вопрос о книге")
+    if any(unicodedata.category(char) == "Cc" and char not in "\n\t" for char in question):
+        raise QuestionUnreadable("В вопросе есть служебные символы. Уберите их и отправьте вопрос ещё раз.")
     if len(question) > settings.MAX_QUESTION_CHARS:
         raise QuestionTooLong(
             f"Вопрос слишком длинный: {len(question)} символов при пределе {settings.MAX_QUESTION_CHARS}. Сократите его."

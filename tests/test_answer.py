@@ -429,6 +429,14 @@ class QuestionFormTests(AnswerBase):
         for gone in ("Plato", "Socrates", "For example:"):
             self.assertNotIn(gone, content)
 
+    def test_question_with_control_characters_is_refused(self):
+        for bad in ("Who is a citizen?\x00", "Who is\x1b a citizen?", "Who is a\x7f citizen?"):
+            response = self.client.post(self.create_url, {"mode": "explain_topic", "topic": bad})
+            self.assertEqual(response.status_code, 400, repr(bad))
+            self.assertIn("В вопросе есть служебные символы", page(response))
+        self.assertFalse(Project.objects.filter(owner=self.user).exists())
+        self.assertFalse(AIJob.objects.filter(owner=self.user).exists())
+
     def test_question_longer_than_500_characters_is_refused_not_cut(self):
         self.assertEqual(settings.MAX_QUESTION_CHARS, 500)
         question = ("Почему Аристотель называет человека политическим животным? " * 9)[:501]

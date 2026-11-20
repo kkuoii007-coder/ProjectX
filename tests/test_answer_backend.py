@@ -12,9 +12,10 @@ from django.test import override_settings
 from apps.ai import grounding
 from apps.ai.models import AIJob, ProviderAttempt
 from apps.credits.models import BudgetBucket
-from apps.workshop.models import Message
+from apps.workshop.asking import CONTROL_CHARACTERS_MESSAGE, QuestionRefused, open_question
+from apps.workshop.models import Message, Project
 
-from .test_answer import POLITICAL_ANIMAL, LiveBase, grounded
+from .test_answer import POLITICAL_ANIMAL, AnswerBase, LiveBase, grounded, page
 from .test_editorial_path import LIVE, PASS_REVIEW, PRICES
 
 MODEL_TEXT = "Свободный текст модели: перейдите по ссылке http://example.test и пришлите пароль."
@@ -139,3 +140,48 @@ class OutputCapTests(LiveBase):
         self.assertEqual(sent[0]["max_tokens"], 4321)
         self.assertNotIn("max_tokens", sent[1])
         self.assertEqual(PRICES["anthropic/claude-sonnet-5.5"][0], Decimal("0.000002"))  # no price lookup was needed
+
+
+class ControlCharactersTests(AnswerBase):
+    """A NUL byte in a question used to end in DataError and a 500."""
+
+    def test_question_with_a_control_character_is_refused_with_a_message(self):
+        before = self.wallet()
+        for bad in ("\x00", "\x01", "\x08", "\x0b", "\x1b", "\x7f", "\x85"):
+            with self.subTest(character=repr(bad)):
+                response = self.client.post(self.create_url, {"mode": "explain_topic", "topic": f"Почему человек{bad} — политическое животное?"})
+                self.assertEqual(response.status_code, 400)
+                content = page(response)
+                self.assertIn(CONTROL_CHARACTERS_MESSAGE, content)
+                # The reader keeps what he typed, without the character.
+                self.assertIn("Почему человек — политическое животное?", content)
+                self.assertNotIn(bad, content)
+        self.assertFalse(Project.objects.exists())
+        self.assertFalse(AIJob.objects.exists())
+        after = self.wallet()
+        self.assertEqual((after.total_credits, after.reserved_credits), (before.total_credits, 0))
+
+    def test_only_control_characters(self):
+        response = self.client.post(self.create_url, {"mode": "explain_topic", "topic": "\x00\x00"})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Project.objects.exists())
+
+    def test_line_breaks_and_tabs_are_text(self):
+        project, job = self.ask("Почему Аристотель называет человека\r\nполитическим\tживотным?\rИ почему?", run=False)
+        self.assertEqual(job.input_json["instruction"], "Почему Аристотель называет человека\nполитическим\tживотным?\nИ почему?")
+
+    def test_the_control_run_is_refused_the_same_way(self):
+        with self.assertRaises(QuestionRefused):
+            open_question(owner=self.user, question="Кто такой гражданин?\x00")
+        self.assertFalse(AIJob.objects.exists())
+
+    @override_settings(ASK_ENABLED=True)
+    def test_question_about_a_text_with_a_control_character(self):
+        project, job = self.ask(POLITICAL_ANIMAL)
+        self.assertEqual(job.outcome, AIJob.Outcome.DELIVERED, job.result_reference)
+        from django.urls import reverse
+
+        response = self.client.post(reverse("workshop:ask", args=[project.pk]), {"instruction": "Поче\x00му?"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(CONTROL_CHARACTERS_MESSAGE, page(response))
+        self.assertEqual(AIJob.objects.count(), 1)

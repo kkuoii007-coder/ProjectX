@@ -98,7 +98,7 @@ claim_support сохраняет ссылки на evidence и разрешён�
 При удалении SourceChunk исчезает доказательная связь, а не появляется копия текста.
 Серверные citation_id существуют внутри действия и сверяются с RetrievalItem.
 
-Ответ с источником (версия 1.5). В payload у каждой части
+Ответ с источником (версия 1.7). В payload у каждой части
 sources: [{citation_id, label, locator, excerpt, book}], на уровне ревизии —
 based_on (названия книг) и source_editions (book, book_ru, attribution, links —
 пары «подпись, адрес»: цифровой издатель, файл источника, лицензия). Это

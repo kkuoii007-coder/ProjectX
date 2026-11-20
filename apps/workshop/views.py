@@ -13,7 +13,7 @@ from apps.ai.services import EDIT_NOT_SUPPORTED_MESSAGE, InsufficientCredits, Jo
 from apps.credits.models import CreditReservation
 from apps.sources.shelf import shelf_books
 
-from .asking import QuestionRefused, normalize_question, open_question
+from .asking import CONTROL_CHARACTERS_MESSAGE, QuestionRefused, has_control_characters, normalize_question, open_question, without_control_characters
 from .models import Message, Project, Revision
 
 
@@ -57,7 +57,7 @@ def create_project(request):
         except QuestionRefused as exc:
             # Refused before a project, a job or a reservation; a question
             # that is too long is not cut: the reader keeps what he typed.
-            return _create_page(request, status=exc.status, error=str(exc), topic=normalize_question(raw))
+            return _create_page(request, status=exc.status, error=str(exc), topic=without_control_characters(normalize_question(raw)))
         except InsufficientCredits:
             # Атомарный блок уже откатился: проект не создан. Рендерим вне транзакции,
             # иначе контекст-процессор упадёт на запросе в прерванной транзакции.
@@ -186,6 +186,8 @@ def ask(request, project_id):
     if not instruction or len(instruction) > 2000:
         return _project_page(request, project, status=400, error="Введите вопрос до 2000 символов")
     key = request.POST.get("idempotency_key", "").strip() or uuid.uuid4().hex
+    if has_control_characters(instruction) or has_control_characters(key):
+        return _project_page(request, project, status=400, error=CONTROL_CHARACTERS_MESSAGE)
     try:
         create_job(owner=request.user, kind=AIJob.Kind.ASK, idempotency_key=key, instruction=instruction, project=project, base_revision=project.head_revision)
     except InsufficientCredits as exc:
@@ -227,6 +229,8 @@ def edit_fragment(request, project_id):
     if kind == AIJob.Kind.EDIT_SENTENCE and not 0 <= sentence_idx < len(parts[part_idx].get("sentences", [])):
         return _project_page(request, project, status=400, error="Некорректная цель правки")
     key = request.POST.get("idempotency_key", "").strip() or uuid.uuid4().hex
+    if has_control_characters(instruction) or has_control_characters(key):
+        return _project_page(request, project, status=400, error=CONTROL_CHARACTERS_MESSAGE)
     try:
         create_job(
             owner=request.user,

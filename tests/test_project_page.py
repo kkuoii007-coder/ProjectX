@@ -89,6 +89,9 @@ class RefusedActionKeepsTheTextTests(TestCase):
             ({"kind": "edit_sentence", "target": "нет", "instruction": "проще"}, "Некорректная цель правки"),
             ({"kind": "edit_sentence", "target": "0:9", "instruction": "проще"}, "Некорректная цель правки"),
             ({"kind": "edit_part", "target": "9", "instruction": "проще"}, "Некорректная цель правки"),
+            # A NUL byte cannot be stored: a message, not a 500.
+            ({"kind": "edit_sentence", "target": "0:0", "instruction": "про\x00ще"}, "В тексте есть служебные символы"),
+            ({"kind": "edit_part", "target": "1", "instruction": "проще", "idempotency_key": "a\x00b"}, "В тексте есть служебные символы"),
         )
         for data, error in cases:
             with self.subTest(data=data):
