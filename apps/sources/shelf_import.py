@@ -13,6 +13,12 @@ separate step (`index_source`), which keeps these chunks as they are.
 A repeated import of the same file with the same extraction settings
 creates nothing and touches no chunk or embedding; it only brings the
 edition's metadata in line with the manifest.
+
+The edition describes the document that is on the shelf. When a new version
+of the file is imported while the previous document is still the one being
+searched, the fields bound to the file (its address, date, sha256 and the
+query lexicon) wait in the new document's metadata and reach the edition at
+the moment that document becomes READY (retrieval.index_document).
 """
 
 import hashlib
@@ -27,7 +33,7 @@ from django.db import transaction
 
 from .models import SourceChunk, SourceDocument, SourceEdition, SourceWork
 from .perseus import EXTRACTOR_VERSION, SourceFormatError, extract_perseus_tei
-from .retrieval import STRUCTURED
+from .retrieval import EDITION_PENDING, EDITION_SOURCE_FIELDS, STRUCTURED, superseded_document_ids
 from .services import text_hash
 from .structured import build_chunks, size_distribution
 
@@ -36,7 +42,11 @@ FORMATS = {"perseus-tei-bekker": extract_perseus_tei}
 _WORK_FIELDS = ("author", "title", "author_ru", "title_ru", "kind", "language", "canonical_url")
 _EDITION_FIELDS = (
     "edition", "translator", "language", "rights", "url", "retrieved_at", "series",
-    "first_published_year", "printing_year", "digital_publisher", "license", "license_url",
+    "first_published_year", "printing_year", "digital_publisher", "digital_publisher_url", "license", "license_url",
+)
+# Addresses that the reader's page turns into links.
+_URL_FIELDS = (
+    ("work", "canonical_url"), ("edition", "url"), ("edition", "license_url"), ("edition", "digital_publisher_url"),
 )
 
 
@@ -50,6 +60,8 @@ class ImportReport:
     created: bool = False
     dry_run: bool = False
     edition_changed: list = field(default_factory=list)
+    # Fields of the edition that wait until the new document is READY.
+    edition_deferred: list = field(default_factory=list)
     supersedes_set: object = None
     notes: list = field(default_factory=list)
     stats: dict = field(default_factory=dict)
@@ -82,6 +94,10 @@ def load_manifest(path: str) -> dict:
         raise ShelfImportError(f"Неизвестный формат источника: {manifest['source']['format']}")
     if manifest["edition"]["rights"] not in ("allowed", "unknown"):
         raise ShelfImportError("edition.rights: допустимы allowed и unknown")
+    for section, name in _URL_FIELDS:
+        value = manifest[section].get(name)
+        if value and not (isinstance(value, str) and value.startswith(("https://", "http://"))):
+            raise ShelfImportError(f"{section}.{name}: ожидается адрес http(s), получено {value!r}")
     for entry in manifest.get("query_lexicon", {}).get("ru", []):
         if not entry.get("en") or not (entry.get("stems") or entry.get("words")):
             raise ShelfImportError(f"Запись словаря без основ или без английских слов: {entry}")
@@ -129,8 +145,28 @@ def _apply(instance, values: dict) -> list:
     return changed
 
 
-def _sync_edition(manifest: dict):
-    """Find the work and the edition by their manifest keys or create them."""
+def _shelf_document(edition):
+    """The document of the edition that the search uses now, or None."""
+    return (
+        edition.documents.filter(
+            owner__isnull=True,
+            visibility=SourceDocument.Visibility.EDITORIAL,
+            processing_state=SourceDocument.Processing.READY,
+        )
+        .exclude(id__in=superseded_document_ids())
+        .order_by("-version")
+        .first()
+    )
+
+
+def _sync_edition(manifest: dict, target=None):
+    """Find the work and the edition by their manifest keys or create them.
+
+    `target` is the document this import is about (None: it is yet to be
+    created). Returns (edition, changed, pending): `pending` holds the
+    file-bound fields that must not reach the edition yet, because another
+    document of this edition is the one on the shelf.
+    """
     work_values = {name: manifest["work"].get(name, "") for name in _WORK_FIELDS}
     work_values["kind"] = work_values["kind"] or "primary"
     work_values["language"] = work_values["language"] or "en"
@@ -156,10 +192,33 @@ def _sync_edition(manifest: dict):
         edition = SourceEdition(key=manifest["key"], work=work)
     elif edition.work_id != work.pk:
         raise ShelfImportError(f"Издание {manifest['key']} уже принадлежит другой работе")
+    pending = {}
+    on_shelf = None if created else _shelf_document(edition)
+    if on_shelf is not None and (target is None or target.pk != on_shelf.pk):
+        pending = {name: values.pop(name) for name in EDITION_SOURCE_FIELDS}
+        pending = {name: value for name, value in pending.items() if getattr(edition, name) != value}
     edition_changed = _apply(edition, values)
     if created or edition_changed:
         edition.save()
-    return edition, ([] if created else changed + edition_changed)
+    return edition, ([] if created else changed + edition_changed), pending
+
+
+def _park(document, pending: dict, report) -> dict:
+    """Metadata of `document` with the edition fields that wait for READY."""
+    metadata = {key: value for key, value in (document.metadata_json or {}).items() if key != EDITION_PENDING}
+    if not pending:
+        return metadata
+    if document.processing_state == SourceDocument.Processing.READY:
+        # An older version imported again: the shelf has moved on, the
+        # edition keeps describing the document that is searched.
+        report.notes.append("Издание описывает более новый документ на полке; его адрес, хеш и словарь не изменены")
+        return metadata
+    stored = dict(pending)
+    if stored.get("retrieved_at"):
+        stored["retrieved_at"] = stored["retrieved_at"].isoformat()
+    metadata[EDITION_PENDING] = stored
+    report.edition_deferred = sorted(pending)
+    return metadata
 
 
 def _resolve_supersedes(value):
@@ -230,7 +289,11 @@ def import_shelf_book(manifest_path: str, *, supersedes=None, dry_run: bool = Fa
             _resolve_supersedes(supersedes)
             return report
         with transaction.atomic():
-            _, report.edition_changed = _sync_edition(manifest)
+            _, report.edition_changed, pending = _sync_edition(manifest, existing)
+            metadata = _park(existing, pending, report)
+            if metadata != existing.metadata_json:
+                existing.metadata_json = metadata
+                existing.save(update_fields=["metadata_json"])
             _link(existing, _resolve_supersedes(supersedes), report)
         return report
 
@@ -257,7 +320,7 @@ def import_shelf_book(manifest_path: str, *, supersedes=None, dry_run: bool = Fa
         return report
 
     with transaction.atomic():
-        edition, report.edition_changed = _sync_edition(manifest)
+        edition, report.edition_changed, pending = _sync_edition(manifest)
         old = _resolve_supersedes(supersedes)
         previous = edition.documents.order_by("-version").first()
         same_text = edition.documents.filter(content_hash=content_hash).first()
@@ -267,7 +330,7 @@ def import_shelf_book(manifest_path: str, *, supersedes=None, dry_run: bool = Fa
                 f"(было {same_text.metadata_json.get('extraction')}, сейчас {signature}). "
                 "Второй документ с тем же текстом в одной линии версий не создаётся."
             )
-        document = SourceDocument.objects.create(
+        document = SourceDocument(
             owner=None,
             edition=edition,
             lineage_id=previous.lineage_id if previous else uuid.uuid4(),
@@ -292,6 +355,8 @@ def import_shelf_book(manifest_path: str, *, supersedes=None, dry_run: bool = Fa
                 "stats": extraction.stats,
             },
         )
+        document.metadata_json = _park(document, pending, report)
+        document.save(force_insert=True)
         SourceChunk.objects.bulk_create(
             [
                 SourceChunk(

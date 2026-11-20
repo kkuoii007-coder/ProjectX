@@ -24,6 +24,28 @@ class ShelfBook:
     title_ru: str
     label_ru: str  # "Аристотель, «Политика»" or ""
     related_texts: tuple  # slugs of library texts that retell the book
+    # Addresses for the attribution ("" if the manifest gives none): the
+    # source file in its repository, the licence, the digital publisher.
+    source_url: str = ""
+    license_url: str = ""
+    digital_publisher_url: str = ""
+    # The same as (label, url) pairs ready for a page, http(s) only.
+    links: tuple = ()
+
+
+def _web(url) -> str:
+    """An address a page may link to; anything else becomes ""."""
+    url = (url or "").strip()
+    return url if url.startswith(("https://", "http://")) else ""
+
+
+def _links(edition) -> tuple:
+    pairs = (
+        (edition.digital_publisher or "Digital text", _web(edition.digital_publisher_url)),
+        ("Source file", _web(edition.url)),
+        (edition.license or "Licence", _web(edition.license_url)),
+    )
+    return tuple((label, url) for label, url in pairs if url)
 
 
 def shelf_books() -> list:
@@ -60,6 +82,10 @@ def shelf_books() -> list:
                 title_ru=work.title_ru,
                 label_ru=work.label_ru,
                 related_texts=tuple(edition.related_texts or ()),
+                source_url=_web(edition.url),
+                license_url=_web(edition.license_url),
+                digital_publisher_url=_web(edition.digital_publisher_url),
+                links=_links(edition),
             )
         )
     return books

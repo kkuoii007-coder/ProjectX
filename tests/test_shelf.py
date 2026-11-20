@@ -16,7 +16,9 @@ from unittest import mock
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from apps.accounts.models import User
@@ -42,6 +44,10 @@ ATTRIBUTION = (
     "Aristotle, Politics. Translated by H. Rackham. Loeb Classical Library (first published 1932). "
     "Digital text: Perseus Digital Library, from the 1944 printing. CC BY-SA 4.0."
 )
+SOURCE_URL = (
+    "https://github.com/PerseusDL/canonical-greekLit/blob/8375d5b7f542fd28790d05895c380d9c2620ca9d/"
+    "data/tlg0086/tlg035/tlg0086.tlg035.perseus-eng2.xml"
+)
 GREEK = re.compile(r"[\u0370-\u03ff\u1f00-\u1fff]")
 
 # The eight control questions of the product owner, word for word, with the
@@ -57,9 +63,23 @@ QUESTIONS = [
     ("Почему Аристотель считает сильный средний слой полезным для государства?", 4, {"1295b", "1296a"}),
     ("Зачем, по Аристотелю, государству нужно общее воспитание?", 8, {"1337a"}),
 ]
+# Question 6 names Plato, and the lexicon has no philosophers' names: the
+# text half finds the right pages, but with a coverage below the threshold
+# of the answering step (0.5). Known limitation of the text half: this
+# question is carried by the vector half. See docs/spec/docs/sources-and-rag.md.
+BELOW_TEXT_THRESHOLD = {"Почему Аристотель критикует общность имущества у Платона?"}
 OFF_SHELF_QUESTIONS = [
     "Что такое заброшенность у Хайдеггера?",
     "Что такое категорический императив у Канта?",
+]
+# Russian questions that are not about the book but use a word the lexicon
+# knows (or a word that only looks like one): hits, if any, must be weak.
+HALF_KNOWN_QUESTIONS = [
+    ("Что такое свобода у Сартра?", ["сартра"]),
+    ("Что такое душа у Платона?", ["платона"]),
+    ("Что такое классическая немецкая философия?", ["классическая", "немецкая", "философия"]),
+    ("Когда фильм законченный?", ["фильм", "законченный"]),
+    ("Что такое бытие-в-мире?", ["бытие", "мире"]),
 ]
 # Phrases that anchor the expected places above: (phrase, exact locator).
 ANCHORS = [
@@ -411,7 +431,7 @@ class FullBookTests(SimpleTestCase):
     def test_lexicon_is_data_of_the_book(self):
         entries = self.manifest["query_lexicon"]["ru"]
         self.assertGreaterEqual(len(entries), 40)
-        self.assertLessEqual(len(entries), 70)
+        self.assertLessEqual(len(entries), 80)
         words = {form for entry in entries for form in entry.get("stems", []) + entry.get("words", [])}
         for name in ("хайдеггер", "кант", "платон"):
             self.assertFalse(any(form.startswith(name[:4]) for form in words), name)
@@ -421,6 +441,54 @@ class FullBookTests(SimpleTestCase):
                 with self.subTest(term=term):
                     self.assertIn(term.lower(), text)
         self.assertEqual(self.manifest["related_texts"], ["why-do-people-live-in-cities"])
+
+    def _english(self, word):
+        return lexical._translations(word, self.manifest["query_lexicon"]["ru"])
+
+    def test_lexicon_stems_are_not_wider_than_their_word(self):
+        for word in (
+            "законченный", "закончить", "классический", "классическая", "классика", "мире", "мировой",
+            "женитьба", "жених", "равнина", "равнодушие", "среднеазиатский", "общежитие", "общаться",
+            "разумеется", "спартак", "отличный", "отлично", "полиция", "полисный", "критика", "критерий",
+            "домино", "судьба", "рабочий", "работа", "видимо", "формула", "мирить", "правительница",
+        ):
+            with self.subTest(word=word):
+                self.assertEqual(self._english(word), [])
+        for word, term in (
+            ("законы", "law"), ("законный", "law"), ("классов", "class"), ("класса", "class"),
+            ("среднего", "middle"), ("жены", "wives"), ("женщинам", "women"), ("равенство", "equality"),
+            ("равных", "equal"), ("мира", "peace"), ("общее", "common"), ("общественный", "public"),
+            ("разумом", "reason"), ("спартанцы", "Spartan"), ("отличается", "difference"), ("полиса", "city"),
+            ("управление", "administration"), ("политика", "politics"), ("сильный", "strong"),
+            ("полезным", "useful"), ("виды", "kind"),
+        ):
+            with self.subTest(word=word):
+                self.assertIn(term, self._english(word))
+
+    def test_stop_and_frame_words_take_no_word_of_the_book(self):
+        """The lists of words left out of a question live in one place
+        (lexical.py). None of them is a word the lexicon translates, and no
+        English frame word is a query word of the lexicon."""
+        entries = self.manifest["query_lexicon"]["ru"]
+        for word in sorted(lexical.RU_STOPWORDS | lexical.RU_FRAME_WORDS):
+            with self.subTest(word=word):
+                self.assertEqual(self._english(word), [])
+        english = {term.lower() for entry in entries for term in entry["en"]}
+        self.assertEqual(english & lexical.EN_FRAME_WORDS, set())
+        vocabulary = {"entries": entries, "ignore_exact": {"aristotle"}, "ignore_ru": {"аристотел"}}
+        # Words that begin like a left-out word are still asked about.
+        for word in ("должности", "нужда", "мнимый", "говорливый", "значение", "законы", "государство", "общее", "цели"):
+            with self.subTest(word=word):
+                self.assertEqual(
+                    [concept.source for concept in lexical.question_concepts(f"Что {word} считает?", vocabulary)],
+                    [word],
+                )
+        for question, _, _ in QUESTIONS:
+            with self.subTest(question=question):
+                left_out = lexical.RU_STOPWORDS | lexical.RU_FRAME_WORDS
+                kept = {concept.source for concept in lexical.question_concepts(question, vocabulary)}
+                self.assertEqual(kept & left_out, set())
+                self.assertTrue(kept)
 
 
 class LocatorFormatTests(SimpleTestCase):
@@ -553,6 +621,111 @@ class ShelfImportTests(TestCase):
         self.assertEqual(edition.work.title_ru, "Политика (книга первая)")
         document.refresh_from_db()
         self.assertEqual(document.processing_state, SourceDocument.Processing.READY)
+
+    def _new_version(self, **changes):
+        """The fixture book with one word of its file changed: a new version."""
+        manifest_path = _copy_manifest(self, **changes)
+        folder = os.path.dirname(manifest_path)
+        xml_path = os.path.join(folder, os.path.basename(FIXTURE_XML))
+        with open(xml_path, "rb") as handle:
+            data = handle.read().replace(b"political animal", b"political creature")
+        with open(xml_path, "wb") as handle:
+            handle.write(data)
+        with open(manifest_path, encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        manifest["source"]["sha256"] = hashlib.sha256(data).hexdigest()
+        with open(manifest_path, "w", encoding="utf-8") as handle:
+            json.dump(manifest, handle, ensure_ascii=False)
+        return manifest_path, manifest["source"]["sha256"]
+
+    def test_edition_describes_the_document_on_the_shelf(self):
+        """A new version of the file does not change the hash, the address
+        and the lexicon of the edition while the previous document is the
+        one being searched; they change when the new document is READY."""
+        _run("import_shelf_book", manifest=FIXTURE_MANIFEST)
+        first = SourceDocument.objects.get()
+        with mock.patch.object(retrieval, "embed_texts", _fake_vectors):
+            index_document(first)
+        edition = SourceEdition.objects.get()
+        before = (edition.source_sha256, edition.query_lexicon, edition.url, edition.retrieved_at)
+        self.assertEqual(before[0], first.metadata_json["source_sha256"])
+
+        lexicon = {"ru": [{"stems": ["животн"], "en": ["creature"]}]}
+        new_url = "https://example.org/politics-v2.xml"
+        manifest, new_sha = self._new_version(
+            **{"query_lexicon": lexicon, "edition.url": new_url, "edition.retrieved_at": "2026-12-01",
+               "edition.translator": "Harris Rackham"}
+        )
+        out, _ = _run("import_shelf_book", manifest=manifest)
+        second = SourceDocument.objects.exclude(pk=first.pk).get()
+        self.assertEqual((second.version, second.supersedes_id), (2, first.pk))
+        self.assertIn("Отложено до готовности этого документа (пока в поиске прежний): "
+                      "query_lexicon, retrieved_at, source_sha256, url", out)
+        self.assertNotIn("source_sha256", out.split("Метаданные издания обновлены: ")[1].splitlines()[0])
+        edition.refresh_from_db()
+        self.assertEqual((edition.source_sha256, edition.query_lexicon, edition.url, edition.retrieved_at), before)
+        # What does not depend on the file follows the manifest at once.
+        self.assertEqual(edition.translator, "Harris Rackham")
+        self.assertEqual(second.metadata_json["source_sha256"], new_sha)
+        self.assertEqual(
+            second.metadata_json["edition_pending"],
+            {"url": new_url, "retrieved_at": "2026-12-01T00:00:00+00:00", "source_sha256": new_sha,
+             "query_lexicon": lexicon},
+        )
+        with mock.patch.object(retrieval, "embed_texts", _no_embeddings):
+            hits = search_shelf("животное").hits
+        self.assertEqual({hit.chunk.document_id for hit in hits}, {first.pk})
+
+        # The same new file again, with one more change in the lexicon.
+        lexicon = {"ru": [{"stems": ["животн"], "en": ["creature", "animal"]}]}
+        with open(manifest, encoding="utf-8") as handle:
+            data = json.load(handle)
+        data["query_lexicon"] = lexicon
+        with open(manifest, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False)
+        out, _ = _run("import_shelf_book", manifest=manifest)
+        self.assertIn(f"уже импортировано: {second.pk}", out)
+        edition.refresh_from_db()
+        self.assertEqual((edition.source_sha256, edition.query_lexicon), before[:2])
+        second.refresh_from_db()
+        self.assertEqual(second.metadata_json["edition_pending"]["query_lexicon"], lexicon)
+
+        with mock.patch.object(retrieval, "embed_texts", _fake_vectors):
+            self.assertEqual(index_document(second)["state"], "ready")
+        edition.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual((edition.source_sha256, edition.query_lexicon, edition.url), (new_sha, lexicon, new_url))
+        self.assertEqual(edition.retrieved_at.isoformat(), "2026-12-01T00:00:00+00:00")
+        self.assertNotIn("edition_pending", second.metadata_json)
+        with mock.patch.object(retrieval, "embed_texts", _no_embeddings):
+            hits = search_shelf("животное").hits
+        self.assertEqual({hit.chunk.document_id for hit in hits}, {second.pk})
+
+        # The first file again: the shelf has moved on, the edition stays.
+        out, _ = _run("import_shelf_book", manifest=FIXTURE_MANIFEST)
+        self.assertIn(f"уже импортировано: {first.pk}", out)
+        self.assertIn("Издание описывает более новый документ на полке", out)
+        edition.refresh_from_db()
+        first.refresh_from_db()
+        self.assertEqual((edition.source_sha256, edition.query_lexicon, edition.url), (new_sha, lexicon, new_url))
+        self.assertNotIn("edition_pending", first.metadata_json)
+
+    def test_new_version_before_the_first_is_ready_goes_straight_to_the_edition(self):
+        _run("import_shelf_book", manifest=FIXTURE_MANIFEST)
+        manifest, new_sha = self._new_version()
+        out, _ = _run("import_shelf_book", manifest=manifest)
+        self.assertNotIn("Отложено", out)
+        self.assertEqual(SourceEdition.objects.get().source_sha256, new_sha)
+        self.assertNotIn("edition_pending", SourceDocument.objects.get(version=2).metadata_json)
+
+    def test_addresses_in_the_manifest_must_be_web_addresses(self):
+        for field in ("edition.url", "edition.license_url", "edition.digital_publisher_url"):
+            with self.subTest(field=field):
+                wrong = _copy_manifest(self, **{field: "javascript:alert(1)"})
+                with self.assertRaises(CommandError) as caught:
+                    _run("import_shelf_book", manifest=wrong)
+                self.assertIn(f"{field}: ожидается адрес http(s)", str(caught.exception))
+        self.assertEqual(self._counts(), (0, 0, 0, 0, 0))
 
     def test_file_that_differs_from_the_manifest_is_refused(self):
         wrong = _copy_manifest(self, **{"source.sha256": "0" * 64})
@@ -793,11 +966,59 @@ class ShelfListTests(TestCase):
         self.assertEqual((book.author_ru, book.title_ru), ("Аристотель", "Политика"))
         self.assertEqual(book.label_ru, "Аристотель, «Политика»")
         self.assertEqual(book.related_texts, ("why-do-people-live-in-cities",))
+        self.assertEqual(book.digital_publisher_url, "https://www.perseus.tufts.edu/")
+        self.assertEqual(book.source_url, SOURCE_URL)
+        self.assertEqual(book.license_url, "https://creativecommons.org/licenses/by-sa/4.0/")
+        self.assertEqual(
+            book.links,
+            (
+                ("Perseus Digital Library", "https://www.perseus.tufts.edu/"),
+                ("Source file", SOURCE_URL),
+                ("CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
+            ),
+        )
 
         response = self.client.get(self.url)
         self.assertContains(response, f"On the shelf: {ATTRIBUTION}")
+        for label, url in book.links:
+            self.assertContains(response, f'<a href="{url}" rel="noopener noreferrer">{label}</a>', html=True)
+        self.assertContains(response, "data-shelf-links", count=1)
+        # A template comment must not leak into the page.
+        self.assertNotContains(response, "{#")
+        self.assertNotContains(response, "The shelf is data")
         self.assertContains(response, '<span class="ru-ui" lang="ru">На полке: Аристотель, «Политика»</span>', html=True)
         self.assertContains(response, "data-shelf-book", count=1)
+
+    def test_links_are_escaped_and_only_web_addresses_become_links(self):
+        _run("import_shelf_book", manifest=FIXTURE_MANIFEST)
+        _make_ready(SourceDocument.objects.get())
+        # Put straight into the database, past the checks of the importer.
+        SourceEdition.objects.update(
+            digital_publisher='Perseus <b>"Library"</b>',
+            digital_publisher_url='https://example.org/?a=1&b="><script>alert(1)</script>',
+            license_url="javascript:alert(1)",
+            url="",
+        )
+        book = shelf_books()[0]
+        self.assertEqual(book.license_url, "")
+        self.assertEqual(book.source_url, "")
+        self.assertEqual([label for label, _ in book.links], ['Perseus <b>"Library"</b>'])
+        content = self.client.get(self.url).content.decode()
+        self.assertNotIn("<script>alert(1)", content)
+        self.assertNotIn("javascript:", content)
+        self.assertNotIn('<b>"Library"', content)
+        self.assertIn(
+            '<a href="https://example.org/?a=1&amp;b=&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" '
+            'rel="noopener noreferrer">Perseus &lt;b&gt;&quot;Library&quot;&lt;/b&gt;</a>',
+            content,
+        )
+        line = re.search(r"<p [^>]*data-shelf-book>.*?</p>", content, re.S).group()
+        self.assertEqual(line.count("<a "), 1)
+
+        SourceEdition.objects.update(digital_publisher_url="")
+        response = self.client.get(self.url)
+        self.assertContains(response, "data-shelf-book", count=1)
+        self.assertNotContains(response, "data-shelf-links")
 
     def test_book_for_text(self):
         _run("import_shelf_book", manifest=FIXTURE_MANIFEST)
@@ -866,6 +1087,102 @@ class RussianQuestionTests(TestCase):
                     self.assertTrue(hit.locator.startswith("Politics "))
                     self.assertGreater(hit.scores["fts_raw"], 0)
                     self.assertIsNone(hit.scores["vector_raw"])
+                expected = [
+                    hit.scores["fts_coverage"] for hit in result.hits[:3]
+                    if hit.chunk.locator_json["book"] == book
+                    and pages & {segment["bekker"] for segment in hit.chunk.locator_json["segments"]}
+                ]
+                if question in BELOW_TEXT_THRESHOLD:
+                    # Known limitation: the name the lexicon does not have
+                    # outweighs the words it has.
+                    self.assertEqual(result.unmapped_terms, ["платона"])
+                    self.assertTrue(all(hit.scores["fts_coverage"] < 0.5 for hit in result.hits))
+                    self.assertGreater(max(expected), 0.15)
+                else:
+                    self.assertEqual(result.unmapped_terms, [])
+                    self.assertEqual(result.missing_terms, [])
+                    self.assertGreaterEqual(max(expected), 0.8)
+
+    def test_only_one_control_question_is_below_the_text_threshold(self):
+        self.assertEqual(len(BELOW_TEXT_THRESHOLD), 1)
+        self.assertTrue(BELOW_TEXT_THRESHOLD <= {question for question, _, _ in QUESTIONS})
+
+    def test_half_known_russian_questions_are_weak_or_empty(self):
+        """A Russian word the shelf cannot translate counts against the
+        coverage: one known word does not make the question covered."""
+        for question, unmapped in HALF_KNOWN_QUESTIONS:
+            with self.subTest(question=question):
+                result = search_shelf(question)
+                self.assertEqual(result.unmapped_terms, unmapped)
+                self.assertEqual(result.missing_terms, [])
+                self.assertLess(max((hit.scores["fts_coverage"] for hit in result.hits), default=0.0), 0.35)
+        self.assertEqual(search_shelf("Что такое классическая немецкая философия?").hits, [])
+        self.assertEqual(search_shelf("Когда фильм законченный?").hits, [])
+        self.assertEqual(search_shelf("Что такое бытие-в-мире?").hits, [])
+        self.assertEqual(search_shelf("Что такое свобода у Сартра?").fts_terms, ["freedom", "liberty", "free"])
+        # The same known word alone is a question the book can be asked.
+        self.assertEqual(search_shelf("Что такое свобода?").hits[0].scores["fts_coverage"], 1.0)
+
+    def test_long_query_is_cut_to_64_words(self):
+        """Without the cut a query of twenty thousand words ends in
+        "stack depth limit exceeded" inside PostgreSQL."""
+        junk = " ".join(f"zq{number}x" for number in range(20000))
+        result = search_shelf("citizen " + junk)
+        self.assertTrue(result.hits)
+        self.assertEqual(result.fts_terms, ["citizen"])
+        self.assertEqual(len(result.missing_terms), lexical.MAX_CONCEPTS - 1)
+        self.assertEqual(result.missing_terms[-1], f"zq{lexical.MAX_CONCEPTS - 2}x")
+        # What stands after the 64th significant word is dropped.
+        result = search_shelf(junk + " citizen")
+        self.assertEqual((result.hits, result.fts_terms), ([], []))
+        self.assertEqual(len(result.missing_terms), lexical.MAX_CONCEPTS)
+        russian = " ".join(f"слово{number}" for number in range(20000))
+        result = search_shelf("гражданин " + russian)
+        self.assertTrue(result.hits)
+        self.assertEqual(len(result.unmapped_terms), lexical.MAX_CONCEPTS - 1)
+        # Function words do not use up the 64.
+        result = search_shelf(" ".join(["что", "the", "и", "of"] * 500) + " citizen")
+        self.assertEqual(result.fts_terms, ["citizen"])
+        self.assertEqual(result.hits[0].scores["fts_coverage"], 1.0)
+
+    def test_english_word_reached_twice_is_weighed_once(self):
+        def scores(question):
+            return [(hit.chunk.id, hit.scores["fts_raw"], hit.scores["fts_coverage"]) for hit in search_shelf(question).hits]
+
+        # «государство» -> state, city; «город» -> city.
+        self.assertEqual(scores("государство и город"), scores("государство"))
+        self.assertEqual(search_shelf("государство и город").fts_terms, ["state", "city"])
+        # «устройство» -> constitution; «правление» -> government, constitution.
+        result = search_shelf("государственное устройство и правление")
+        self.assertEqual(result.fts_terms, ["state", "city", "constitution", "government"])
+        self.assertEqual(scores("устройство и правление"), scores("constitution government"))
+
+    def test_top_n_of_zero_or_less_is_the_default(self):
+        default = len(search_shelf("Кого Аристотель считает гражданином?").hits)
+        self.assertEqual(default, settings.RETRIEVAL_MAX_CHUNKS)
+        for top_n in (0, -1, -100):
+            with self.subTest(top_n=top_n):
+                self.assertEqual(len(search_shelf("Кого Аристотель считает гражданином?", top_n=top_n).hits), default)
+        self.assertEqual(len(search_shelf("Кого Аристотель считает гражданином?", top_n=2).hits), 2)
+
+    def test_number_of_queries_does_not_grow_with_the_hits(self):
+        counts = []
+        for top_n in (1, 8):
+            with CaptureQueriesContext(connection) as queries:
+                result = search_shelf("Кого Аристотель считает гражданином?", top_n=top_n)
+            self.assertEqual(len(result.hits), top_n)
+            counts.append(len(queries))
+            with self.assertNumQueries(0):
+                for hit in result.hits:
+                    self.assertEqual(hit.chunk.document.edition.work.label, "Aristotle, Politics")
+        self.assertEqual(counts[0], counts[1])
+        counts = []
+        for top in (1, 8):
+            with CaptureQueriesContext(connection) as queries:
+                out, _ = _run("search_sources", query="Кого Аристотель считает гражданином?", top=top)
+            self.assertEqual(out.count(ATTRIBUTION), top)
+            counts.append(len(queries))
+        self.assertEqual(counts[0], counts[1])
 
     def test_questions_about_other_philosophers_find_nothing(self):
         for question in OFF_SHELF_QUESTIONS:
@@ -882,7 +1199,9 @@ class RussianQuestionTests(TestCase):
     def test_two_named_questions_reach_the_exact_passages(self):
         result = search_shelf("Почему Аристотель называет человека политическим животным?")
         self.assertEqual(result.fts_terms, ["man", "human", "mankind", "political", "animal"])
-        self.assertEqual(result.unmapped_terms, ["называет"])
+        # «называет» frames the question; it is neither searched nor missed.
+        self.assertEqual((result.unmapped_terms, result.missing_terms), ([], []))
+        self.assertEqual(result.hits[0].scores["fts_coverage"], 1.0)
         top = result.hits[0]
         self.assertIn("man is by nature a political animal", top.chunk.text)
         self.assertEqual(
@@ -913,11 +1232,23 @@ class RussianQuestionTests(TestCase):
         self.assertEqual(result.hits, [])
         self.assertEqual(result.missing_terms, ["categorical", "imperative", "kant"])
 
-    def test_author_and_title_are_left_out_of_the_query(self):
-        result = search_shelf("Аристотель Политика")
-        self.assertEqual((result.hits, result.fts_terms, result.unmapped_terms), ([], [], []))
-        result = search_shelf("Aristotle Politics")
-        self.assertEqual((result.hits, result.fts_terms), ([], []))
+    def test_only_the_author_is_left_out_of_the_query(self):
+        for question in ("Аристотель", "По Аристотелю", "Aristotle"):
+            with self.subTest(question=question):
+                result = search_shelf(question)
+                self.assertEqual((result.hits, result.fts_terms, result.unmapped_terms), ([], [], []))
+        # The title of the book is also a word one can ask about.
+        result = search_shelf("Что такое политика?")
+        self.assertEqual(result.fts_terms, ["politics", "statesmanship"])
+        self.assertEqual(result.unmapped_terms, [])
+        self.assertEqual(result.hits[0].scores["fts_coverage"], 1.0)
+        result = search_shelf("What is politics?")
+        self.assertEqual(result.fts_terms, ["politics"])
+        self.assertTrue(result.hits)
+        self.assertEqual(search_shelf("Aristotle Politics").fts_terms, ["politics"])
+        result = search_shelf("Как Аристотель понимает управление государством?")
+        self.assertEqual(result.fts_terms, ["government", "administration", "state", "city"])
+        self.assertEqual(result.unmapped_terms, [])
 
     def test_search_command_prints_locator_attribution_and_timing(self):
         out, _ = _run(
@@ -1010,8 +1341,8 @@ class QuestionConceptsTests(SimpleTestCase):
             {"stems": ["общ"], "en": ["common"]},
             {"stems": ["общен"], "en": ["partnership"]},
         ],
-        "ignore_exact": {"aristotle", "politics"},
-        "ignore_ru": {"аристотел", "политик"},
+        "ignore_exact": {"aristotle"},
+        "ignore_ru": {"аристотел"},
     }
 
     def _terms(self, query):
@@ -1028,9 +1359,38 @@ class QuestionConceptsTests(SimpleTestCase):
     def test_several_entries_add_up(self):
         self.assertEqual(self._terms("общение"), [("общение", "common", "partnership")])
 
-    def test_function_words_author_and_title_are_dropped(self):
-        self.assertEqual(self._terms("Что такое у по Аристотелю в Политике?"), [])
-        self.assertEqual(self._terms("Aristotle's Politics"), [("s",)])
+    def test_stem_in_the_middle_of_a_word_does_not_match(self):
+        vocabulary = {
+            "entries": [
+                {"stems": ["закон"], "en": ["law"]},
+                {"stems": ["раб"], "en": ["slave"]},
+                {"words": ["мир"], "en": ["peace"]},
+            ],
+            "ignore_exact": set(),
+            "ignore_ru": set(),
+        }
+        for word in ("беззаконие", "узаконить", "корабль", "швабра", "кумир", "перемирие", "мирный"):
+            with self.subTest(word=word):
+                self.assertEqual(
+                    [concept.terms for concept in lexical.question_concepts(word, vocabulary)], [(word,)]
+                )
+                self.assertFalse(lexical.question_concepts(word, vocabulary)[0].translated)
+        self.assertEqual(lexical._translations("законы", vocabulary["entries"]), ["law"])
+        self.assertEqual(lexical._translations("рабы", vocabulary["entries"]), ["slave"])
+
+    def test_function_words_and_the_author_are_dropped_and_the_title_stays(self):
+        self.assertEqual(self._terms("Что такое у по Аристотелю в Политике?"), [("политике",)])
+        self.assertEqual(self._terms("Aristotle's Politics"), [("s",), ("politics",)])
+
+    def test_frame_words_are_dropped_as_whole_words_only(self):
+        self.assertEqual(self._terms("Аристотель называет, считает, критикует и говорит, что нужно"), [])
+        self.assertEqual(self._terms("Aristotle says and thinks"), [("and",)])
+        # A longer word that begins the same way is a word of the question.
+        self.assertEqual(self._terms("считается называется"), [("считается",), ("называется",)])
+        self.assertEqual(self._terms("гражданином считает"), [("гражданином", "citizen")])
+
+    def test_repeated_word_is_one_concept(self):
+        self.assertEqual(self._terms("раб, Раб и раб"), [("раб", "slave", "slavery")])
 
     def test_yo_is_read_as_ye(self):
         vocabulary = {"entries": [{"stems": ["жен"], "en": ["wives"]}], "ignore_exact": set(), "ignore_ru": set()}
@@ -1107,6 +1467,37 @@ class TextHalfTests(TestCase):
             )
         self.assertEqual(self._search("citizen")[0][1]["fts_raw"], before)
         self.assertEqual({chunk.document_id for chunk, _ in self._search("citizen")}, {self.document.pk})
+
+    def test_untranslated_russian_word_lowers_the_coverage(self):
+        vocabulary = {
+            "entries": [{"stems": ["граждан"], "en": ["citizen"]}, {"stems": ["гавань", "гаван"], "en": ["harbour"]}],
+            "ignore_exact": set(),
+            "ignore_ru": set(),
+        }
+
+        def run(query):
+            return lexical.text_search(document_ids=[self.document.pk], query=query, vocabulary=vocabulary)
+
+        known = run("гражданин")
+        self.assertEqual((known.terms, known.unmapped, known.missing), (["citizen"], [], []))
+        self.assertEqual({values["coverage"] for values in known.scores.values()}, {1.0})
+        mixed = run("гражданин у Сартра")
+        self.assertEqual((mixed.terms, mixed.unmapped, mixed.missing), (["citizen"], ["сартра"], []))
+        self.assertEqual(set(mixed.scores), set(known.scores))
+        for chunk_id, values in mixed.scores.items():
+            # The order and BM25 are the same; only the share is smaller.
+            self.assertEqual(values["raw"], known.scores[chunk_id]["raw"])
+            self.assertLess(values["coverage"], 0.5)
+        # An untranslated Russian word weighs exactly as an English word
+        # found nowhere in the scope.
+        english = run("citizen sartre")
+        self.assertEqual(english.missing, ["sartre"])
+        self.assertEqual(
+            {chunk_id: values["coverage"] for chunk_id, values in mixed.scores.items()},
+            {chunk_id: values["coverage"] for chunk_id, values in english.scores.items()},
+        )
+        nothing = run("Что такое экзистенция у Сартра?")
+        self.assertEqual((nothing.scores, nothing.terms, nothing.unmapped), ({}, [], ["экзистенция", "сартра"]))
 
     def test_russian_text_is_found_by_its_own_words(self):
         text = "Человек по природе есть существо политическое."
