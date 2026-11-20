@@ -21,10 +21,15 @@
             <input type="hidden" name="mode" value="explain_topic">
             <label for="topic">О какой философской идее вы хотите прочитать?</label>
             <textarea id="topic" name="topic" maxlength="2000" required rows="4" placeholder="{{ placeholder_examples.0 }}">{{ topic }}</textarea>
-            {# Examples are presentation, not data: the first one also serves as the static no-JS placeholder. #}
+            {# Examples of what to type are presentation, not data: the first one also serves as the static no-JS placeholder. #}
             <p class="workshop-examples meta" data-topic-examples>
-              {% for example in placeholder_examples %}<span lang="en"{% if not forloop.first %} hidden{% endif %}>On the shelf: {{ example }}.</span>{% endfor %}
+              {% for example in placeholder_examples %}<span lang="en"{% if not forloop.first %} hidden{% endif %}>For example: {{ example }}.</span>{% endfor %}
             </p>
+            {# The shelf is data: one line per book that is READY and not replaced; nothing when the shelf is empty. #}
+            {# The links (digital publisher, source file, licence) are what the licence of the source asks to show. #}
+            {% for book in shelf_books %}
+            <p class="workshop-examples meta" lang="en" data-shelf-book>On the shelf: {{ book.attribution }}{% if book.links %} <span data-shelf-links>{% for label, url in book.links %}<a href="{{ url }}" rel="noopener noreferrer">{{ label }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</span>{% endif %}<span class="ru-ui" lang="ru">На полке: {% if book.label_ru %}{{ book.label_ru }}{% else %}{{ book.label }}{% endif %}</span></p>
+            {% endfor %}
             <button type="submit">Создать текст</button>
         </form>
         <div class="prose workshop-terms">

@@ -29,7 +29,7 @@ Django 5.2 LTS · Python 3.12 · PostgreSQL 16 + pgvector · серверные 
 - Embeddings через OpenRouter (`openai/text-embedding-3-small`, 1536):
   `index_source --document <uuid> [--reindex]`. Батчи по 16, сеть — только
   вне транзакций БД; проверка размерности вектора перед записью.
-- Гибридный поиск: `search_sources --login --query [--document --top]`.
+- Гибридный поиск: `search_sources --query [--login --document --top --timing]`.
   FTS + cosine по pgvector внутри scope (свои документы + редакционный
   корпус), детерминированное слияние, дедуп, top-N (8 по умолчанию).
   Чужие приватные документы недоступны — покрыто тестом изоляции scope.
@@ -195,6 +195,37 @@ venv/bin/python manage.py vocabulary_profile content/texts/<slug>.json
 пометкой словарика, самые длинные предложения и итог; код возврата 1, если
 словарная проверка отклонила бы подачу (структуру и карточки команда не смотрит).
 Без файла списка слов подача отклоняется: непроверенный текст не проходит.
+
+## Полка: книга с указателями (20 ноября 2026)
+
+- Книга полки описана манифестом `content/sources/<издание>/edition.json`; рядом
+  лежат файл источника и `NOTICE.md`. Первая книга — «Политика» Аристотеля в
+  переводе Х. Рэкхема (Loeb Classical Library, первое издание 1932; цифровой
+  текст Perseus Digital Library по печати 1944 года, CC BY-SA 4.0).
+- `import_shelf_book --manifest <edition.json> [--supersedes <uuid>] [--dry-run]
+  [--print-id]`: проверяет sha256 файла, убирает сноски и греческие вставки,
+  режет текст на фрагменты 300–600 слов по границам предложений без перекрытия
+  и сохраняет у каждого указатель «книга + страница Беккера» (`locator_json`).
+  Сети не требует. Повторный запуск ничего не создаёт («уже импортировано») и
+  только обновляет метаданные издания из манифеста.
+- `index_source --document <uuid>` для такой книги строит только эмбеддинги;
+  фрагменты и указатели не пересоздаются.
+- `--supersedes` заменяет прежнее издание: оно уходит из поиска, когда новое
+  проиндексировано, и не удаляется.
+- Указатель читателю: `Politics 1.1253a`, `Politics 1.1252b–1253a`. Страницу
+  дословной цитаты показывает `locate_quote --quote "…" [--document <uuid>]`.
+- Вопрос ищется по понятиям, а не как фраза: фрагмент не обязан содержать все
+  слова. Русские слова вопроса переводятся словарём издания из манифеста
+  (72 записи); основной путь для русского вопроса — векторная половина поиска
+  (многоязычные эмбеддинги). Значимое слово вопроса, которого нет ни в книге, ни
+  в словаре, снижает покрытие; имя автора не ищется.
+- `search_sources --query "…" [--login] [--document] [--top] [--timing]`: без
+  `--login` ищет по полке; печатает указатель, атрибуцию и оценки (`fts_raw`,
+  `fts_coverage`, `vector_raw`), с `--timing` — время и пик памяти.
+- Список книг на странице нового проекта берётся из данных
+  (`apps/sources/shelf.py`); рядом с атрибуцией — ссылки на цифрового издателя,
+  файл источника и лицензию.
+- Миграции: `sources.0004_shelf_edition_fields`, `sources.0005` (поля издания).
 
 ## Обложка, библиотека и читалка (16 ноября 2026)
 
@@ -391,8 +422,10 @@ Python 3.12, `check`, `makemigrations --check`, `migrate`, полный набо
 | `issue_credits` | Ручное пополнение: `--login --amount --operation-key --reason` (идемпотентно, только при `TOPUP_MODE=manual_test`) |
 | `import_source` | Импорт TXT/MD/PDF: `--path --login [--title]`, дедуп по hash |
 | `import_editorial_source` | Импорт файла на общую редакционную полку (без владельца, виден всем в поиске): `--path --title --author --work-title [--kind --language --canonical-url --edition --translator --rights --edition-url --retrieved-at]`; дедуп по hash, индексация — отдельно `index_source` |
-| `index_source` | Chunking + embeddings: `--document <uuid> [--reindex]` |
-| `search_sources` | Гибридный FTS+vector поиск: `--login --query [--document --top]` |
+| `import_shelf_book` | Книга полки из манифеста: `--manifest <edition.json> [--supersedes <uuid>] [--dry-run] [--print-id]` |
+| `locate_quote` | Страница дословной цитаты: `--quote "…" [--document <uuid>]` |
+| `index_source` | Chunking + embeddings: `--document <uuid> [--reindex]`; у книги полки — только эмбеддинги |
+| `search_sources` | Гибридный поиск: `--query [--login --document --top --timing]`; без `--login` — по полке |
 | `export_user_data` | JSON-выгрузка данных пользователя: `--login [--output]` |
 | `purge_user_data` | Удаление аккаунта и приватных данных: `--login --reason` (ledger сохраняется) |
 
@@ -408,8 +441,9 @@ Python 3.12, `check`, `makemigrations --check`, `migrate`, полный набо
   `AI_REVIEW_MODEL=anthropic/claude-sonnet-5.5` в service.env.
 - Веб-поиск и fetch выключены по умолчанию; SearchAdapter (внешний
   поисковый API) ещё не подключён — DocumentFetcher готов и покрыт тестами.
-- FTS сконфигурирован на 'english'; для русских запросов работает векторная
-  нога и морфология PostgreSQL отсутствует (приемлемо для en-корпуса MVP).
+- FTS сконфигурирован на 'english'; русский вопрос находит английский текст
+  векторной половиной и словарём издания. Покрытие текстовой половины почти
+  бинарно: одно значимое русское слово вне словаря опускает его ниже порога.
 - `seed_demo` больше ничего не публикует; retrieve-сценарий simplify_source
   в edit-потоке не покрыт end-to-end.
 - Вопрос по тексту выключен (`ASK_ENABLED=false`): живой путь сохраняет пустой

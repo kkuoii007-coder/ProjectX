@@ -1,4 +1,8 @@
-"""Index an imported source document: chunking + OpenRouter embeddings."""
+"""Index an imported source document: chunking + OpenRouter embeddings.
+
+A shelf book (import_shelf_book) already has its chunks with locators: they
+are kept, only the embeddings that are still missing are built.
+"""
 
 from uuid import UUID
 
@@ -30,3 +34,8 @@ class Command(BaseCommand):
         if result["state"] == "failed":
             raise CommandError(f"Индексация не удалась ({result.get('error')}): {result.get('message')}")
         self.stdout.write(self.style.SUCCESS(f"Проиндексировано фрагментов: {result['indexed']}"))
+        if result.get("kept_chunks"):
+            self.stdout.write(
+                f"Фрагменты с указателями сохранены: {result['chunks']}; "
+                f"эмбеддинги уже были у {result['chunks'] - result['indexed']}"
+            )

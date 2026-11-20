@@ -1,0 +1,96 @@
+{
+  "key": "fixture-politics-1252b-1253a",
+  "title": "Aristotle, Politics (fixture)",
+  "work": {
+    "key": "fixture-aristotle-politics",
+    "author": "Aristotle",
+    "title": "Politics",
+    "author_ru": "Аристотель",
+    "title_ru": "Политика",
+    "kind": "primary",
+    "language": "en"
+  },
+  "edition": {
+    "edition": "Aristotle in 23 Volumes, Vol. 21. Loeb Classical Library 264. Cambridge, MA: Harvard University Press; London: William Heinemann Ltd.",
+    "translator": "H. Rackham",
+    "language": "en",
+    "series": "Loeb Classical Library",
+    "first_published_year": 1932,
+    "printing_year": 1944,
+    "digital_publisher": "Perseus Digital Library",
+    "digital_publisher_url": "https://www.perseus.tufts.edu/",
+    "license": "CC BY-SA 4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "rights": "allowed",
+    "url": "https://github.com/PerseusDL/canonical-greekLit/blob/8375d5b7f542fd28790d05895c380d9c2620ca9d/data/tlg0086/tlg035/tlg0086.tlg035.perseus-eng2.xml",
+    "retrieved_at": "2026-11-20"
+  },
+  "source": {
+    "file": "politics-1252b-1253a.xml",
+    "sha256": "733c1571697ed8dfa6695b433ef148e6b4de7e98fba84869cfaf6560a4f11551",
+    "format": "perseus-tei-bekker",
+    "repository": "https://github.com/PerseusDL/canonical-greekLit",
+    "commit": "8375d5b7f542fd28790d05895c380d9c2620ca9d",
+    "path": "data/tlg0086/tlg035/tlg0086.tlg035.perseus-eng2.xml"
+  },
+  "locator": {
+    "work": "Politics"
+  },
+  "related_texts": [
+    "why-do-people-live-in-cities"
+  ],
+  "query_lexicon": {
+    "ru": [
+      {
+        "stems": [
+          "государств",
+          "полис"
+        ],
+        "en": [
+          "state",
+          "city"
+        ]
+      },
+      {
+        "words": [
+          "раб",
+          "раба",
+          "рабы",
+          "рабов"
+        ],
+        "stems": [
+          "рабств"
+        ],
+        "en": [
+          "slave",
+          "slavery"
+        ]
+      },
+      {
+        "stems": [
+          "животн"
+        ],
+        "en": [
+          "animal"
+        ]
+      },
+      {
+        "stems": [
+          "политическ"
+        ],
+        "en": [
+          "political"
+        ]
+      },
+      {
+        "stems": [
+          "человек"
+        ],
+        "en": [
+          "man",
+          "human"
+        ]
+      }
+    ]
+  }
+}

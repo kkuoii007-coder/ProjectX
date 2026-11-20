@@ -15,6 +15,22 @@ class SourceWork(models.Model):
     kind = models.CharField(max_length=12, choices=[("primary", "primary"), ("secondary", "secondary")], default="primary")
     language = models.CharField(max_length=8, default="en")
     canonical_url = models.URLField(null=True, blank=True)
+    # Stable key from an edition manifest (content/sources/*/edition.json):
+    # a repeated import finds the work by it instead of creating a new one.
+    key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    author_ru = models.CharField(max_length=200, blank=True)
+    title_ru = models.CharField(max_length=300, blank=True)
+
+    @property
+    def label(self) -> str:
+        """Short name for lists: `Aristotle, Politics`."""
+        return ", ".join(part for part in (self.author, self.title) if part)
+
+    @property
+    def label_ru(self) -> str:
+        if not (self.author_ru and self.title_ru):
+            return ""
+        return f"{self.author_ru}, «{self.title_ru}»"
 
 
 class SourceEdition(models.Model):
@@ -25,6 +41,40 @@ class SourceEdition(models.Model):
     rights = models.CharField(max_length=200, default="unknown")
     url = models.URLField(null=True, blank=True)
     retrieved_at = models.DateTimeField(null=True, blank=True)
+    # Filled from the edition manifest by import_shelf_book.
+    key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    series = models.CharField(max_length=200, blank=True)
+    first_published_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    printing_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    digital_publisher = models.CharField(max_length=200, blank=True)
+    digital_publisher_url = models.URLField(blank=True)
+    license = models.CharField(max_length=100, blank=True)
+    license_url = models.URLField(blank=True)
+    source_sha256 = models.CharField(max_length=64, blank=True)
+    # Russian word stems -> English query words of this book (text search).
+    query_lexicon = models.JSONField(default=dict, blank=True)
+    # Slugs of library texts that retell this book.
+    related_texts = models.JSONField(default=list, blank=True)
+
+    def attribution(self) -> str:
+        """One line for the reader: who wrote, who translated, where the
+        text comes from and under which licence. Built only from the fields
+        that are filled, so an edition with sparse data still reads well."""
+        work = self.work
+        parts = [f"{work.label}."]
+        if self.translator:
+            parts.append(f"Translated by {self.translator}.")
+        if self.series and self.first_published_year:
+            parts.append(f"{self.series} (first published {self.first_published_year}).")
+        elif self.series or self.edition:
+            parts.append(f"{self.series or self.edition}.")
+        if self.digital_publisher and self.printing_year:
+            parts.append(f"Digital text: {self.digital_publisher}, from the {self.printing_year} printing.")
+        elif self.digital_publisher:
+            parts.append(f"Digital text: {self.digital_publisher}.")
+        if self.license:
+            parts.append(f"{self.license}.")
+        return " ".join(part.replace("..", ".") for part in parts)
 
 
 class SourceDocument(models.Model):

@@ -9,12 +9,14 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.ai.models import AIJob
 from apps.ai.services import InsufficientCredits, JobConflict, JobError, QueueFull, create_job
+from apps.sources.shelf import shelf_books
 
 from .models import Message, Project, Revision
 
 
-# Presentation-only examples for the workshop entry form: one of them must be
-# Politics, the text now on the shelf (stage 2 of the owner's content plan).
+# Presentation-only examples of what to type in the workshop entry form.
+# They say nothing about the shelf: the books on the shelf come from data
+# (apps.sources.shelf.shelf_books) and are listed under the form separately.
 TOPIC_EXAMPLES = (
     "Aristotle, Politics",
     "Plato, the cave",
@@ -27,7 +29,12 @@ def _create_page(request, status=200, **extra):
     return render(
         request,
         "workshop/create.html",
-        {"costs": settings.CREDIT_COSTS, "placeholder_examples": TOPIC_EXAMPLES, **extra},
+        {
+            "costs": settings.CREDIT_COSTS,
+            "placeholder_examples": TOPIC_EXAMPLES,
+            "shelf_books": shelf_books(),
+            **extra,
+        },
         status=status,
     )
 
